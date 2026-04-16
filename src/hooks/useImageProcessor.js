@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 export function useImageProcessor({
     imageSrc,
     erasurePoints,
-    restorePoints, // NUEVO: Puntos donde pasaremos el pincel restaurador
+    restorePoints,
     tolerance,
     isAutoOutlineActive,
     onProcessed
@@ -27,7 +27,6 @@ export function useImageProcessor({
             const w = canvas.width;
             const h = canvas.height;
 
-            // --- 1. ALGORITMO FLOOD FILL (Varita Mágica Múltiple) ---
             if (erasurePoints.length > 0) {
                 const mask = new Uint8Array(w * h);
                 mask.fill(255);
@@ -62,7 +61,6 @@ export function useImageProcessor({
                     }
                 }
 
-                // --- 2. SMART DEFRINGE (Refinamiento Inteligente) ---
                 minX = Math.max(0, minX - 2); maxX = Math.min(w - 1, maxX + 2);
                 minY = Math.max(0, minY - 2); maxY = Math.min(h - 1, maxY + 2);
 
@@ -72,7 +70,6 @@ export function useImageProcessor({
                     for (let x = minX; x <= maxX; x++) {
                         const pos = y * w + x;
 
-                        // Solo analizamos el borde exterior del personaje
                         if (mask[pos] === 255) {
                             const isEdge = (x > 0 && mask[pos - 1] === 0) ||
                                 (x < w - 1 && mask[pos + 1] === 0) ||
@@ -83,18 +80,15 @@ export function useImageProcessor({
                                 const i = pos * 4;
                                 const r = data[i], g = data[i + 1], b = data[i + 2];
 
-                                // Calculamos qué tan parecido es este borde al fondo que se borró
                                 let minDist = 9999;
                                 for (const pt of erasurePoints) {
                                     const dist = Math.sqrt(Math.pow(r - pt.r, 2) + Math.pow(g - pt.g, 2) + Math.pow(b - pt.b, 2));
                                     if (dist < minDist) minDist = dist;
                                 }
 
-                                // MAGIA: Si el borde se parece al fondo (ej. un halo blanco sucio), lo hacemos transparente.
-                                // Si es una línea negra del dibujo, minDist será gigante y la línea negra se protegerá al 100%.
-                                const haloThreshold = tolerance + 120;
+                                const haloThreshold = tolerance + 80;
                                 if (minDist < haloThreshold) {
-                                    const alpha = ((minDist - tolerance) / 120) * 255;
+                                    const alpha = ((minDist - tolerance) / 80) * 255;
                                     refinedMask[pos] = Math.max(0, Math.min(255, alpha));
                                 }
                             }
@@ -102,10 +96,8 @@ export function useImageProcessor({
                     }
                 }
 
-                // --- 3. PINCEL RESTAURADOR ---
-                // Si el usuario pinto con SHIFT sobre zonas borradas, forzamos a que reaparezcan
                 if (restorePoints && restorePoints.length > 0) {
-                    const brushRadius = 15; // Tamaño del pincel de restauración
+                    const brushRadius = 10;
                     for (const pt of restorePoints) {
                         const { x, y } = pt;
                         for (let by = -brushRadius; by <= brushRadius; by++) {
@@ -114,7 +106,7 @@ export function useImageProcessor({
                                     const nx = x + bx;
                                     const ny = y + by;
                                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                                        refinedMask[ny * w + nx] = 255; // 255 = restaurar a opacidad completa
+                                        refinedMask[ny * w + nx] = 255;
                                     }
                                 }
                             }
@@ -122,13 +114,11 @@ export function useImageProcessor({
                     }
                 }
 
-                // Finalmente, aplicamos toda la máscara al canal de transparencia de la imagen
                 for (let i = 0; i < w * h; i++) {
                     data[i * 4 + 3] = Math.min(data[i * 4 + 3], refinedMask[i]);
                 }
             }
 
-            // --- 4. AUTO-OUTLINE ---
             if (isAutoOutlineActive) {
                 const edgeData = new Uint8ClampedArray(data);
                 const strokeSize = 3;
@@ -142,21 +132,30 @@ export function useImageProcessor({
                             for (let sy = -strokeSize; sy <= strokeSize; sy++) {
                                 for (let sx = -strokeSize; sx <= strokeSize; sx++) {
                                     if (sy * sy + sx * sx <= strokeSize * strokeSize) {
-                                        const ny = y + sy, nx = x + sx;
-                                        if (ny >= 0 && ny < h && nx >= 0 && nx < w && data[(ny * w + nx) * 4 + 3] >= 128) {
-                                            isEdge = true; break;
+                                        const ny = y + sy;
+                                        const nx = x + sx;
+                                        if (ny >= 0 && ny < h && nx >= 0 && nx < w) {
+                                            const ni = (ny * w + nx) * 4;
+                                            if (data[ni + 3] >= 128) {
+                                                isEdge = true;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                                 if (isEdge) break;
                             }
+
                             if (isEdge) {
-                                edgeData[i] = outlineColor[0]; edgeData[i + 1] = outlineColor[1];
-                                edgeData[i + 2] = outlineColor[2]; edgeData[i + 3] = 255;
+                                edgeData[i] = outlineColor[0];
+                                edgeData[i + 1] = outlineColor[1];
+                                edgeData[i + 2] = outlineColor[2];
+                                edgeData[i + 3] = 255;
                             }
                         }
                     }
                 }
+
                 for (let i = 0; i < data.length; i++) data[i] = edgeData[i];
             }
 
