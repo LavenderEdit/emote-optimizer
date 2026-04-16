@@ -3,7 +3,7 @@ import { Download, Loader2 } from 'lucide-react';
 import PreviewBox from '../ui/PreviewBox';
 import ChatSimulator from '../ui/ChatSimulator';
 
-export default function SidebarRight({ theme, processedImage, onExport, isExporting }) {
+export default function SidebarRight({ theme, processedImage, onExport, isExporting, totalItems }) {
     return (
         <aside className={`w-80 flex flex-col border-l ${theme === 'dark' ? 'border-gray-800 bg-[#18181b]' : 'border-gray-300 bg-white'}`}>
             <div className="p-4 flex-1 overflow-y-auto">
@@ -25,8 +25,8 @@ export default function SidebarRight({ theme, processedImage, onExport, isExport
                     <label className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${theme === 'dark' ? 'border-purple-500 bg-purple-500/10' : 'border-purple-500 bg-purple-50'}`}>
                         <input type="radio" name="format" defaultChecked className="mr-3 text-purple-600 focus:ring-purple-500 h-4 w-4" />
                         <div className="flex-1">
-                            <p className="font-medium text-sm">Twitch Estandar (ZIP)</p>
-                            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>112px, 56px, 28px PNG</p>
+                            <p className="font-medium text-sm">Lote Twitch (ZIP)</p>
+                            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Carpetas c/ 112px, 56px, 28px</p>
                         </div>
                     </label>
                 </div>
@@ -38,16 +38,16 @@ export default function SidebarRight({ theme, processedImage, onExport, isExport
             <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-800' : 'border-gray-300'}`}>
                 <button
                     onClick={onExport}
-                    disabled={!processedImage || isExporting}
-                    className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all ${processedImage && !isExporting
-                            ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-purple-500/20 cursor-pointer'
-                            : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
+                    disabled={totalItems === 0 || isExporting}
+                    className={`w-full py-3 rounded-lg flex items-center justify-center gap-2 font-semibold transition-all ${totalItems > 0 && !isExporting
+                        ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-purple-500/20 cursor-pointer'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-50'
                         }`}
                 >
                     {isExporting ? (
-                        <><Loader2 size={20} className="animate-spin" /> Procesando...</>
+                        <><Loader2 size={20} className="animate-spin" /> Empaquetando ZIP...</>
                     ) : (
-                        <><Download size={20} /> Exportar ZIP</>
+                        <><Download size={20} /> Exportar {totalItems > 0 ? totalItems : ''} Emotes</>
                     )}
                 </button>
             </div>
