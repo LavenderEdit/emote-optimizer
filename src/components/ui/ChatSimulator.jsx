@@ -37,4 +37,3 @@ export default function ChatSimulator({ processedImage, theme }) {
         </div>
     );
 }
-// ... existing code ...
