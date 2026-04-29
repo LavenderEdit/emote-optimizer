@@ -1,5 +1,5 @@
 import React from 'react';
-import { TRANSPARENCY_GRID } from '../../constants/canvasStyles';
+import { TRANSPARENCY_GRID } from '../../constants/CanvasStyles';
 
 export default function ActiveCanvas({
     canvasRef,
