@@ -1,5 +1,5 @@
 import React from 'react';
-import { THEME_STYLES } from '../../constants/canvasStyles';
+import { THEME_STYLES } from '../../constants/CanvasStyles';
 import { useImageProcessor } from '../../hooks/useImageProcessor';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { useCanvasInteraction } from '../../hooks/useCanvasInteraction';
