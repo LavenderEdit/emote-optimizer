@@ -1,16 +1,181 @@
-# React + Vite
+# 🎨 EmoteStudio Pro (Emote Optimizer)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**EmoteStudio Pro** es una aplicación web avanzada diseñada para la optimización, edición y exportación en lote de emotes para plataformas de streaming como **Twitch** y **Discord**.
 
-Currently, two official plugins are available:
+Desarrollada con **React**, permite a los creadores de contenido preparar sus recursos gráficos de manera rápida, eficiente y profesional directamente desde el navegador.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🚀 Características Principales
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 🧩 Procesamiento por Lotes
+- Carga múltiples imágenes simultáneamente (PNG, JPG, WEBP).
+- Soporte para selección manual o *drag & drop*.
 
-## Expanding the ESLint configuration
+### 🎯 Eliminación de Fondo Inteligente
+- Herramienta de gotero interactiva.
+- Algoritmo **Flood Fill** con tolerancia ajustable.
+- Eliminación precisa de fondos o croma.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 🖌️ Pincel de Restauración
+- Recupera áreas borradas accidentalmente.
+- Atajo: `Shift + Arrastrar`.
+
+### 🎚️ Ajustes de Imagen Profesionales
+- Brillo
+- Contraste
+- Saturación
+- Enfoque (*Sharpening*)
+- Procesamiento a nivel de pixel.
+
+### ⚪ Borde Automático
+- Generación de contornos blancos dinámicos.
+- Mejora la legibilidad sobre fondos oscuros.
+
+### 👀 Previsualización en Tiempo Real
+- Visualización en resoluciones de Twitch:
+  - 112px
+  - 56px
+  - 28px
+
+### 💬 Simulador de Chat
+- Simula el comportamiento del emote en chat real.
+- Compatible con modo claro y oscuro.
+
+### 📦 Exportación Empaquetada
+- Redimensionamiento de alta calidad.
+- Generación automática de todas las resoluciones.
+- Exportación en archivo `.zip` listo para subir.
+
+### ↩️ Historial de Cambios
+- Sistema de deshacer (`Ctrl + Z`).
+
+---
+
+## 🏗️ Arquitectura y Tecnologías
+
+El proyecto utiliza herramientas modernas del ecosistema frontend para garantizar alto rendimiento en procesamiento de imágenes:
+
+- **Framework:** React 19
+- **Build Tool:** Vite
+- **Estilos:** Tailwind CSS v4
+- **Iconos:** Lucide React
+- **Manejo de archivos:** JSZip
+- **Procesamiento de imágenes:** Canvas API (algoritmos personalizados)
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+/src
+├── components/
+│   ├── UI
+│   ├── Layout
+│   └── Workspace
+│
+├── hooks/
+│   ├── useCanvasInteraction
+│   ├── useDragAndDrop
+│   ├── useEmoteBatch
+│   └── useImageProcessor
+│
+├── utils/
+│   ├── imageProcessing/
+│   │   ├── floodFill
+│   │   ├── convolution
+│   │   └── colorAlgorithms
+│   │
+│   └── exportUtils.js
+
+```
+
+
+## ⚙️ Instalación y Uso Local
+
+### 📌 Requisitos
+- Node.js instalado
+
+### 🔧 Pasos
+
+```bash
+# Clonar el repositorio
+git clone <url-del-repositorio>
+
+# Entrar al proyecto
+cd emote-optimizer
+
+# Instalar dependencias
+npm install
+
+# Ejecutar en desarrollo
+npm run dev
+```
+
+Abrir en el navegador:
+
+```
+http://localhost:5173
+```
+
+---
+
+## 🧪 Comandos Disponibles
+
+```bash
+npm run dev       # Ejecuta en modo desarrollo (HMR)
+npm run build     # Construcción para producción
+npm run preview   # Previsualiza build de producción
+npm run lint      # Analiza el código con ESLint
+```
+
+---
+
+## 🛠️ Guía de Uso
+
+### 📤 Subir Imagen
+
+* Arrastra archivos al lienzo o usa el botón de subida.
+* Soporta múltiples imágenes.
+
+### 🎯 Borrar Color
+
+* Selecciona el gotero.
+* Haz clic en el color de fondo.
+* Ajusta la tolerancia si es necesario.
+
+### 🖌️ Restaurar Áreas
+
+* Mantén `Shift` y arrastra sobre zonas borradas.
+
+### 📦 Exportar
+
+* Haz clic en **"Exportar Emotes"**.
+* Se generará un archivo `.zip` con todas las resoluciones.
+
+---
+
+## 💡 Notas Técnicas
+
+* Procesamiento completamente en cliente (browser).
+* Uso intensivo de Canvas API para manipulación a nivel de pixel.
+* Algoritmos optimizados:
+
+  * Flood Fill
+  * Convolución (sharpen)
+  * Reducción progresiva de imagen
+
+---
+
+## 📌 Futuras Mejoras (Opcional)
+
+* Soporte para GIF animados
+* Integración directa con APIs de Twitch/Discord
+* Presets de estilos de emotes
+* IA para eliminación de fondo
+
+---
+
+## 🧑‍💻 Autor
+
+Juan S. Pimentel Lalangui
