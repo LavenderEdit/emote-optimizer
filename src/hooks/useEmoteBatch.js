@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { generateEmotesZip } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
+import { analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
@@ -134,6 +135,7 @@ export function useEmoteBatch() {
     const [isGeneratingGrid, setIsGeneratingGrid] = useState(false);
     const [isDetectingGrid, setIsDetectingGrid] = useState(false);
     const [isTrimmingBatch, setIsTrimmingBatch] = useState(false);
+    const [isApplyingBackgroundV2, setIsApplyingBackgroundV2] = useState(false);
 
     const activeEmote = emotes.find(e => e.id === activeId);
     const activeAsset = activeEmote ? assets[activeEmote.sourceId] : null;
@@ -287,6 +289,62 @@ export function useEmoteBatch() {
             setIsTrimmingBatch(false);
         }
     }, [clearPreviewsForIds, getTargetEmoteIds]);
+
+    const applyBackgroundRemovalV2 = useCallback(async (scope = 'targets', mode = 'connected') => {
+        const targetIds = scope === 'all'
+            ? emotesRef.current.map((emote) => emote.id)
+            : scope === 'active'
+                ? activeId ? [activeId] : []
+                : getTargetEmoteIds();
+        if (targetIds.length === 0) return;
+
+        const targetSet = new Set(targetIds);
+        setIsApplyingBackgroundV2(true);
+        try {
+            const updatesById = {};
+            const targets = emotesRef.current.filter((emote) => targetSet.has(emote.id));
+            for (const emote of targets) {
+                const asset = assetsRef.current[emote.sourceId];
+                if (!asset) {
+                    updatesById[emote.id] = {
+                        validation: mergeValidationWarnings(emote.validation, ['No se encontro el asset fuente para fondo v2.']),
+                    };
+                    continue;
+                }
+
+                try {
+                    const analysis = await analyzeEmoteBackgroundRemovalV2(emote, asset, {
+                        mode,
+                        tolerance: emote.backgroundRemoval?.tolerance ?? emote.tolerance ?? 34,
+                        feather: emote.backgroundRemoval?.feather ?? 1,
+                        despill: emote.backgroundRemoval?.despill ?? 0.75,
+                    });
+                    updatesById[emote.id] = {
+                        backgroundRemoval: {
+                            ...analysis.backgroundRemoval,
+                            mode,
+                            erasurePoints: [],
+                            restorePoints: [],
+                        },
+                        erasurePoints: [],
+                        restorePoints: [],
+                        validation: mergeValidationWarnings(emote.validation, analysis.warnings),
+                    };
+                } catch (error) {
+                    updatesById[emote.id] = {
+                        validation: mergeValidationWarnings(emote.validation, [error.message || 'No se pudo aplicar fondo v2.']),
+                    };
+                }
+            }
+
+            setEmotes((current) => current.map((emote) => (
+                updatesById[emote.id] ? mergeEmoteUpdates(emote, updatesById[emote.id]) : emote
+            )));
+            clearPreviewsForIds(targetIds);
+        } finally {
+            setIsApplyingBackgroundV2(false);
+        }
+    }, [activeId, clearPreviewsForIds, getTargetEmoteIds]);
 
     const updateActivePreview = useCallback((emoteId, blob) => {
         const nextUrl = URL.createObjectURL(blob);
@@ -522,7 +580,7 @@ export function useEmoteBatch() {
         selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
         activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
         copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
-        trimSelectedEmotes, isTrimmingBatch,
+        trimSelectedEmotes, isTrimmingBatch, applyBackgroundRemovalV2, isApplyingBackgroundV2,
         comparisonMode, setComparisonMode,
         gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
         isEyedropperActive, setIsEyedropperActive,

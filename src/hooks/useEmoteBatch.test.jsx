@@ -29,6 +29,10 @@ const trimMock = vi.hoisted(() => ({
     trimEmoteToContent: vi.fn(),
 }));
 
+const backgroundV2Mock = vi.hoisted(() => ({
+    analyzeEmoteBackgroundRemovalV2: vi.fn(),
+}));
+
 vi.mock('../features/grid-import/gridDetection/runGridDetection', () => ({
     startGridDetection: detectionMock.startGridDetection,
 }));
@@ -37,11 +41,16 @@ vi.mock('../features/editor/imagePipeline/trimContent', () => ({
     trimEmoteToContent: trimMock.trimEmoteToContent,
 }));
 
+vi.mock('../features/editor/imagePipeline/backgroundRemovalV2', () => ({
+    analyzeEmoteBackgroundRemovalV2: backgroundV2Mock.analyzeEmoteBackgroundRemovalV2,
+}));
+
 describe('useEmoteBatch', () => {
     beforeEach(() => {
         detectionMock.requests.length = 0;
         detectionMock.startGridDetection.mockClear();
         trimMock.trimEmoteToContent.mockReset();
+        backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockReset();
         vi.stubGlobal('alert', vi.fn());
         vi.stubGlobal('Image', class {
             set src(value) {
@@ -280,5 +289,43 @@ describe('useEmoteBatch', () => {
         expect(result.current.emotes[0].cropRect).toEqual({ x: 4, y: 5, width: 40, height: 42 });
         expect(result.current.emotes[1].validation.warnings).toContain('Contenido tocando el borde izquierdo del crop.');
         expect(result.current.emotes[2].cropRect).not.toEqual({ x: 4, y: 5, width: 40, height: 42 });
+    });
+
+    it('applies background removal v2 independently to 24 selected grid emotes', async () => {
+        backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockImplementation((emote) => Promise.resolve({
+            backgroundRemoval: {
+                version: 2,
+                mode: 'connected',
+                tolerance: 34,
+                samples: [[255, 255, 255], [240, 240, 240], [emote.cropRect.x, emote.cropRect.y, 255]],
+                removedRatio: 0.42,
+                removedPixels: 1200,
+                warnings: [],
+            },
+            warnings: [],
+        }));
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            result.current.updateGridDraft((draft) => ({
+                ...draft,
+                cells: draft.cells.map((cell) => cell.id === 'r5c5' ? { ...cell, empty: true, enabled: false } : cell),
+            }));
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            await result.current.applyBackgroundRemovalV2('targets', 'connected');
+        });
+
+        expect(result.current.emotes).toHaveLength(24);
+        expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledTimes(24);
+        expect(result.current.emotes.every((emote) => emote.backgroundRemoval.version === 2)).toBe(true);
+        expect(new Set(result.current.emotes.map((emote) => JSON.stringify(emote.backgroundRemoval.samples)))).toHaveLength(24);
     });
 });

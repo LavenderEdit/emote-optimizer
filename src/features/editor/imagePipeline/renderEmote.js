@@ -3,6 +3,7 @@ import { applyProAdjustments } from '../../../utils/imageProcessing/adjustments'
 import { applyFloodFillErasure } from '../../../utils/imageProcessing/floodFill';
 import { applyRestoreBrush } from '../../../utils/imageProcessing/restoreBrush';
 import { clamp } from '../../../shared/math/rect';
+import { applyBackgroundRemovalMask, createBackgroundRemovalMask, renderMaskToImageData } from './backgroundRemovalV2';
 
 export function loadImageElement(src) {
     return new Promise((resolve, reject) => {
@@ -39,7 +40,7 @@ export async function renderEmoteMasterCanvas(emote, asset, options = {}) {
     );
 
     if (options.applyOperations !== false) {
-        applyDocumentOperations(canvas, emote);
+        applyDocumentOperations(canvas, emote, options);
     }
     return canvas;
 }
@@ -110,13 +111,28 @@ function resolveOutputRelativeValue(value, targetSize) {
     return Math.round(safeValue);
 }
 
-export function applyDocumentOperations(canvas, emote) {
+export function applyDocumentOperations(canvas, emote, options = {}) {
     const context = canvas.getContext('2d', { willReadFrequently: true });
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     const backgroundRemoval = getBackgroundRemoval(emote);
 
-    if (backgroundRemoval.erasurePoints.length > 0) {
+    if (isBackgroundRemovalV2(emote)) {
+        const v2Settings = getBackgroundRemovalV2(emote);
+        const result = createBackgroundRemovalMask(data, canvas.width, canvas.height, v2Settings);
+        if (options.maskOnly) {
+            renderMaskToImageData(data, canvas.width, canvas.height, result);
+            context.putImageData(imageData, 0, 0);
+            return;
+        }
+        applyBackgroundRemovalMask(data, canvas.width, canvas.height, result, v2Settings);
+    } else if (options.maskOnly) {
+        const fallbackMask = new Uint8Array(canvas.width * canvas.height);
+        fallbackMask.fill(255);
+        renderMaskToImageData(data, canvas.width, canvas.height, { mask: fallbackMask });
+        context.putImageData(imageData, 0, 0);
+        return;
+    } else if (backgroundRemoval.erasurePoints.length > 0) {
         const refinedMask = applyFloodFillErasure(
             data,
             canvas.width,
@@ -143,6 +159,20 @@ export function applyDocumentOperations(canvas, emote) {
     }
 
     context.putImageData(imageData, 0, 0);
+}
+
+export function isBackgroundRemovalV2(emote) {
+    return emote.backgroundRemoval?.version === 2 || String(emote.backgroundRemoval?.mode || '').startsWith('v2');
+}
+
+export function getBackgroundRemovalV2(emote) {
+    const backgroundRemoval = emote.backgroundRemoval || {};
+    return {
+        ...backgroundRemoval,
+        tolerance: backgroundRemoval.tolerance ?? emote.tolerance ?? 34,
+        erasurePoints: backgroundRemoval.erasurePoints ?? emote.erasurePoints ?? [],
+        restorePoints: backgroundRemoval.restorePoints ?? emote.restorePoints ?? [],
+    };
 }
 
 export function getBackgroundRemoval(emote) {

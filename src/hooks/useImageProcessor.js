@@ -16,6 +16,7 @@ export function useImageProcessor({
             if (!emote || !asset || !canvasRef.current) return;
             const renderedCanvas = await renderEmoteMasterCanvas(emote, asset, {
                 applyOperations: comparisonMode !== 'before',
+                maskOnly: comparisonMode === 'mask',
             });
             if (!renderedCanvas || cancelled || !canvasRef.current) return;
 
@@ -26,7 +27,7 @@ export function useImageProcessor({
             context.clearRect(0, 0, canvas.width, canvas.height);
             context.drawImage(renderedCanvas, 0, 0);
 
-            if (onPreviewReady && comparisonMode !== 'before') {
+            if (onPreviewReady && comparisonMode === 'after') {
                 try {
                     const blob = await canvasToBlob(canvas);
                     if (!cancelled) onPreviewReady(emote.id, blob);

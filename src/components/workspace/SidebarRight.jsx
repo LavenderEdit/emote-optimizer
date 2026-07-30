@@ -24,6 +24,8 @@ export default function SidebarRight({
     onApplyActiveSettings,
     onTrimSelected,
     isTrimmingBatch,
+    onApplyBackgroundV2,
+    isApplyingBackgroundV2,
 }) {
     const isDark = theme === 'dark';
     const buttonClass = isDark
@@ -37,6 +39,9 @@ export default function SidebarRight({
     const paddingPercent = Math.round((activeEmote?.padding || 0) * 100);
     const offsetXPercent = Math.round((frame.offsetX || 0) * 100);
     const offsetYPercent = Math.round((frame.offsetY || 0) * 100);
+    const removedPercent = activeEmote?.backgroundRemoval?.version === 2
+        ? Math.round((activeEmote.backgroundRemoval.removedRatio || 0) * 100)
+        : null;
 
     return (
         <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
@@ -53,6 +58,29 @@ export default function SidebarRight({
                     </div>
                     <div className={`w-full flex justify-between text-xs font-mono ${isDark ? 'text-[#deb069]/50' : 'text-gray-500'}`}>
                         <span>112px</span><span>56px</span><span>28px</span>
+                    </div>
+                </div>
+
+                <h3 className={`font-semibold mb-3 text-sm uppercase tracking-wider ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
+                    Fondo v2
+                </h3>
+                <div className={`mb-6 rounded p-3 space-y-3 ${isDark ? 'bg-[#3d0604] border border-[#7f6000]/30' : 'bg-gray-100'}`}>
+                    <div className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
+                        {removedPercent == null ? 'Sin mascara v2 activa' : `${removedPercent}% removido`}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('active', 'connected')} disabled={!activeEmote || isApplyingBackgroundV2}>
+                            {isApplyingBackgroundV2 ? <Loader2 size={13} className="inline animate-spin" /> : <Wand2 size={13} className="inline" />} Activo
+                        </button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('targets', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
+                            Seleccion
+                        </button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('all', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
+                            Todos
+                        </button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2(selectedCount > 0 ? 'targets' : 'active', 'global')} disabled={!activeEmote || isApplyingBackgroundV2}>
+                            Global
+                        </button>
                     </div>
                 </div>
 
@@ -140,12 +168,15 @@ export default function SidebarRight({
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-3 gap-1">
                         <button type="button" className={comparisonMode === 'before' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('before')}>
                             <EyeOff size={13} className="inline" /> Antes
                         </button>
                         <button type="button" className={comparisonMode === 'after' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('after')}>
                             <Eye size={13} className="inline" /> Despues
+                        </button>
+                        <button type="button" className={comparisonMode === 'mask' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('mask')}>
+                            Mascara
                         </button>
                     </div>
                 </div>
