@@ -9,7 +9,8 @@ import GridImportWorkspace from '../../features/grid-import/components/GridImpor
 
 export default function CanvasArea({
     theme,
-    imageSrc,
+    emote,
+    asset,
     onImageRemove,
     onUploadClick,
     onGridUploadClick,
@@ -17,24 +18,23 @@ export default function CanvasArea({
     gridDraft,
     onGridDraftChange,
     onGridGenerate,
+    onGridAutoDetect,
     onGridCancel,
     isGeneratingGrid,
+    isDetectingGrid,
     isEyedropperActive,
-    tolerance,
-    isAutoOutlineActive,
-    adjustments,
-    onProcessed,
-    erasurePoints,
     setErasurePoints,
-    restorePoints,
     setRestorePoints,
+    onPreviewReady,
     saveToHistory
 }) {
     const isDark = theme === 'dark';
     const currentStyles = isDark ? THEME_STYLES.dark : THEME_STYLES.light;
 
     const { canvasRef } = useImageProcessor({
-        imageSrc, erasurePoints, restorePoints, tolerance, isAutoOutlineActive, adjustments, onProcessed
+        emote,
+        asset,
+        onPreviewReady,
     });
 
     const { isDragging, dragHandlers } = useDragAndDrop(onFileDrop);
@@ -56,10 +56,12 @@ export default function CanvasArea({
                     theme={theme}
                     onDraftChange={onGridDraftChange}
                     onGenerate={onGridGenerate}
+                    onAutoDetect={onGridAutoDetect}
                     onCancel={onGridCancel}
                     isGenerating={isGeneratingGrid}
+                    isDetecting={isDetectingGrid}
                 />
-            ) : !imageSrc ? (
+            ) : !emote || !asset ? (
                 <EmptyDropzone
                     currentStyles={currentStyles}
                     onUploadClick={onUploadClick}

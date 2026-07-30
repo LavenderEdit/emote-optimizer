@@ -13,15 +13,7 @@ export function createEmoteDocumentFromAsset(asset) {
         documentType: 'individual',
         name: sanitizeName(asset.name, 'emote'),
         sourceId: asset.id,
-        source: {
-            id: asset.id,
-            fileName: asset.fileName,
-            mimeType: asset.mimeType,
-            bytes: asset.bytes,
-            width: asset.width,
-            height: asset.height,
-            objectUrl: asset.objectUrl,
-        },
+        sourceMeta: createSourceMeta(asset),
         cropRect: { x: 0, y: 0, width: asset.width, height: asset.height },
         fitMode: 'contain',
         padding: 0,
@@ -41,8 +33,6 @@ export function createEmoteDocumentFromAsset(asset) {
             errors: [],
             warnings: [],
         },
-        originalSrc: asset.objectUrl,
-        processedSrc: null,
         erasurePoints: [],
         restorePoints: [],
         history: [],
@@ -51,28 +41,24 @@ export function createEmoteDocumentFromAsset(asset) {
     };
 }
 
-export function createEmoteDocumentFromGridCell({ gridAsset, cell, dataUrl }) {
+export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey }) {
     return {
         id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
         documentType: 'grid-cell',
         name: sanitizeName(cell.name, `emote_${cell.row + 1}_${cell.column + 1}`),
         sourceId: gridAsset.id,
-        source: {
-            id: gridAsset.id,
-            fileName: gridAsset.fileName,
-            mimeType: gridAsset.mimeType,
-            bytes: gridAsset.bytes,
-            width: gridAsset.width,
-            height: gridAsset.height,
-        },
+        sourceMeta: createSourceMeta(gridAsset),
         gridCell: {
             id: cell.id,
             row: cell.row,
             column: cell.column,
             sourceRect: cell.sourceRect,
             contentRect: cell.contentRect,
+            classification: cell.classification || (cell.empty ? 'empty' : 'content'),
+            diagnostics: cell.diagnostics || null,
         },
         cropRect: cell.contentRect,
+        generationKey,
         fitMode: 'contain',
         padding: 0,
         backgroundRemoval: {
@@ -89,14 +75,23 @@ export function createEmoteDocumentFromGridCell({ gridAsset, cell, dataUrl }) {
         },
         validation: {
             errors: [],
-            warnings: cell.empty ? ['Celda marcada como vacia.'] : [],
+            warnings: cell.warnings || (cell.empty ? ['Celda marcada como vacia.'] : []),
         },
-        originalSrc: dataUrl,
-        processedSrc: null,
         erasurePoints: [],
         restorePoints: [],
         history: [],
         tolerance: 30,
         isAutoOutlineActive: false,
+    };
+}
+
+function createSourceMeta(asset) {
+    return {
+        id: asset.id,
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        bytes: asset.bytes,
+        width: asset.width,
+        height: asset.height,
     };
 }

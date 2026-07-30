@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
-import { Check, Grid2X2, MousePointer2, RotateCcw, Scissors, X } from 'lucide-react';
+import { AlertTriangle, ScanSearch, Grid2X2, MousePointer2, RotateCcw, Scissors, X } from 'lucide-react';
 import { rebuildDraftFromBands, rebuildDraftFromSettings, updateDraftCell } from '../gridSegmentation/gridDraft';
 import { updateBandEdge } from '../gridSegmentation/createUniformGrid';
+import { getCellGenerationKey } from '../gridSegmentation/extractGridCells';
 
 export default function GridImportWorkspace({
     draft,
     theme,
     onDraftChange,
     onGenerate,
+    onAutoDetect,
     onCancel,
     isGenerating,
+    isDetecting,
 }) {
     const isDark = theme === 'dark';
     const activeCount = draft.cells.filter((cell) => cell.enabled && !cell.empty).length;
+    const pendingCount = draft.cells.filter((cell) => (
+        cell.enabled &&
+        !cell.empty &&
+        (draft.generatedCellKeys || {})[cell.id] !== getCellGenerationKey(cell)
+    )).length;
 
     const updateSettings = (updates) => {
         onDraftChange((current) => rebuildDraftFromSettings(current, updates));
@@ -56,6 +64,16 @@ export default function GridImportWorkspace({
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={onAutoDetect}
+                                disabled={isDetecting}
+                                className={secondaryButtonClass(isDark)}
+                                title="Detectar automaticamente filas, columnas y celdas vacias"
+                            >
+                                <ScanSearch size={16} />
+                                {isDetecting ? 'Detectando...' : 'Detectar automaticamente'}
+                            </button>
                             <button
                                 type="button"
                                 onClick={resetGuides}
@@ -108,7 +126,7 @@ export default function GridImportWorkspace({
                             Ultima vacia
                         </button>
                         <div className={`rounded border px-3 py-2 text-center text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}>
-                            {activeCount} recortes activos
+                            {activeCount} activos / {pendingCount} pendientes
                         </div>
                     </div>
 
@@ -116,8 +134,8 @@ export default function GridImportWorkspace({
                         <button
                             type="button"
                             onClick={onGenerate}
-                            disabled={activeCount === 0 || isGenerating}
-                            className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-colors ${activeCount > 0 && !isGenerating
+                            disabled={pendingCount === 0 || isGenerating}
+                            className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-colors ${pendingCount > 0 && !isGenerating
                                 ? isDark
                                     ? 'bg-[#c41026] text-white hover:bg-[#a00d1e]'
                                     : 'bg-purple-600 text-white hover:bg-purple-700'
@@ -127,7 +145,7 @@ export default function GridImportWorkspace({
                                 }`}
                         >
                             <Scissors size={16} />
-                            {isGenerating ? 'Generando...' : `Generar ${activeCount} recortes`}
+                            {isGenerating ? 'Generando...' : `Generar ${pendingCount} recortes`}
                         </button>
                     </div>
 
@@ -137,7 +155,12 @@ export default function GridImportWorkspace({
                         </div>
                     )}
 
+                    <div className={`mt-3 rounded border px-3 py-2 text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}>
+                        Confianza: {Math.round((draft.confidence ?? 1) * 100)}%
+                    </div>
+
                     <CellReview
+                        source={draft.source}
                         cells={draft.cells}
                         isDark={isDark}
                         onUpdateCell={updateCell}
@@ -310,7 +333,7 @@ function GuideLine({ axis, value, sourceSize, onPointerDown }) {
     );
 }
 
-function CellReview({ cells, isDark, onUpdateCell }) {
+function CellReview({ source, cells, isDark, onUpdateCell }) {
     return (
         <div className="mt-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide">Revisar celdas</h3>
@@ -320,11 +343,19 @@ function CellReview({ cells, isDark, onUpdateCell }) {
                         key={cell.id}
                         className={`rounded border p-2 text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}
                     >
-                        <div className="mb-2 flex items-center justify-between">
-                            <span className="font-semibold">Fila {cell.row + 1}, Col {cell.column + 1}</span>
-                            <span className={cell.empty ? 'text-yellow-500' : cell.enabled ? 'text-green-500' : 'text-red-500'}>
-                                {cell.empty ? 'Vacia' : cell.enabled ? 'Activa' : 'Omitida'}
-                            </span>
+                        <div className="mb-2 flex gap-2">
+                            <CellThumbnail source={source} cell={cell} />
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold">Fila {cell.row + 1}, Col {cell.column + 1}</span>
+                                    <span className={cell.empty ? 'text-yellow-500' : cell.enabled ? 'text-green-500' : 'text-red-500'}>
+                                        {cell.empty ? 'Vacia' : cell.enabled ? 'Activa' : 'Omitida'}
+                                    </span>
+                                </div>
+                                <div className={`mt-1 truncate ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
+                                    {cell.classification || (cell.empty ? 'empty' : 'content')} - {Math.round((cell.confidence ?? 1) * 100)}%
+                                </div>
+                            </div>
                         </div>
                         <input
                             value={cell.name}
@@ -350,11 +381,57 @@ function CellReview({ cells, isDark, onUpdateCell }) {
                                 Vacia
                             </label>
                         </div>
+                        <CellWarnings cell={cell} isDark={isDark} />
                     </div>
                 ))}
             </div>
         </div>
     );
+}
+
+function CellThumbnail({ source, cell }) {
+    const crop = cell.contentRect || cell.sourceRect;
+    const size = 52;
+    const scale = Math.min(size / crop.width, size / crop.height);
+
+    return (
+        <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded border border-black/10 bg-white">
+            <div
+                className="bg-no-repeat"
+                style={{
+                    width: Math.max(1, crop.width * scale),
+                    height: Math.max(1, crop.height * scale),
+                    backgroundImage: `url("${source.objectUrl}")`,
+                    backgroundSize: `${source.width * scale}px ${source.height * scale}px`,
+                    backgroundPosition: `${-crop.x * scale}px ${-crop.y * scale}px`,
+                }}
+            />
+        </div>
+    );
+}
+
+function CellWarnings({ cell, isDark }) {
+    const warnings = getCellWarnings(cell);
+    if (warnings.length === 0) return null;
+
+    return (
+        <div className={`mt-2 space-y-1 rounded border px-2 py-1 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'}`}>
+            {warnings.map((warning) => (
+                <div key={warning} className="flex items-start gap-1">
+                    <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                    <span>{warning}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function getCellWarnings(cell) {
+    const warnings = [...(cell.warnings || [])];
+    if (cell.empty) warnings.push('No se exportara mientras este marcada como vacia.');
+    if (cell.classification === 'uncertain') warnings.push('Clasificacion dudosa: revisa antes de generar.');
+    if (cell.contentRect.width < 16 || cell.contentRect.height < 16) warnings.push('Recorte demasiado pequeno.');
+    return [...new Set(warnings)];
 }
 
 function NumberField({ label, min, max, value, onChange, isDark }) {

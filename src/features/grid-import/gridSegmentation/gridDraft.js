@@ -28,6 +28,7 @@ export function createGridDraft(asset, settings = {}) {
         confidence: 1,
         warnings: ['Grid manual: verifica guias y celdas antes de generar recortes.'],
         generatedCount: 0,
+        generatedCellKeys: {},
     };
 }
 
@@ -55,6 +56,7 @@ export function rebuildDraftFromSettings(draft, settings) {
         rowBands: grid.rowBands,
         columnBands: grid.columnBands,
         cells: grid.cells,
+        generatedCellKeys: {},
     };
 }
 
@@ -76,6 +78,7 @@ export function rebuildDraftFromBands(draft, rowBands, columnBands) {
         columns: columnBands.length,
         rowBands,
         columnBands,
+        generatedCellKeys: {},
         cells: grid.cells.map((cell) => {
             const rowBand = rowBands[cell.row];
             const columnBand = columnBands[cell.column];
@@ -105,5 +108,31 @@ export function updateDraftCell(draft, cellId, updates) {
         cells: draft.cells.map((cell) => (
             cell.id === cellId ? { ...cell, ...updates } : cell
         )),
+    };
+}
+
+export function createGridDraftFromAnalysis(asset, analysis) {
+    return {
+        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        mode: 'automatic',
+        source: asset,
+        settings: {
+            rows: analysis.rows,
+            columns: analysis.columns,
+            margins: analysis.outerMargins,
+            horizontalGap: analysis.horizontalGap,
+            verticalGap: analysis.verticalGap,
+            inset: 0,
+        },
+        rows: analysis.rows,
+        columns: analysis.columns,
+        rowBands: analysis.rowBands,
+        columnBands: analysis.columnBands,
+        cells: analysis.cells,
+        confidence: analysis.confidence,
+        warnings: analysis.warnings,
+        generatedCount: 0,
+        generatedCellKeys: {},
+        analysis,
     };
 }

@@ -9,3 +9,13 @@
 - Grid cell extraction preserves the configured crop rectangle and does not stretch rectangular cells. Twitch manual export now renders each size from the available master image into a transparent square using `contain`.
 - Centralized the initial Twitch static presets and output metadata validation under `src/features/export`.
 - The automatic detector and Web Worker are intentionally not marked complete in this delivery; the manual editor creates the correction surface that the detector will feed next.
+
+## 2026-07-30 - Stabilization and automatic detection v1
+
+- Rebasing `feat/grid-pack-studio` onto `origin/main` completed without conflicts.
+- Removed the persistent `onProcessed` data URL path. `useImageProcessor` now renders from `sourceId + cropRect + operations` and only emits a revocable preview Blob URL for UI previews.
+- Grid cells no longer store full rendered data URLs. They share the original grid asset and persist crop, background-removal operations, adjustments, outline and generation metadata.
+- `Generar recortes` compares a per-cell generation key so a second click does not duplicate unchanged cells. Editing guides or a cell name changes the key and allows regeneration.
+- Added automatic grid detection in a Web Worker. The detector estimates the border background, builds projection profiles, detects foreground/card runs and gutters, scores regularity, then classifies cells with local edge-background sampling plus `scoreEmptyCell`.
+- Automatic detection results load into the existing manual editor with confidence and warnings. Low confidence is a correction-required state, not a silent export path.
+- Added integration coverage for the grid workspace, document extraction, `useEmoteBatch`, export package creation and the synthetic 994 x 1001 reference-style grid.

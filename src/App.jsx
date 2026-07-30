@@ -11,9 +11,10 @@ function App() {
     theme, setTheme,
     fileInputRef,
     emotes,
+    assets,
     activeId, setActiveId,
-    activeEmote, updateActiveEmote,
-    gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, isGeneratingGrid,
+    activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateActivePreview,
+    gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
     isEyedropperActive, setIsEyedropperActive,
     isExporting,
     processFiles, handleFileInput, triggerUpload,
@@ -56,7 +57,8 @@ function App() {
         <div className="flex-1 flex flex-col min-w-0">
           <CanvasArea
             theme={theme}
-            imageSrc={activeEmote?.originalSrc || null}
+            emote={activeEmote}
+            asset={activeAsset}
             onImageRemove={handleRemoveActive}
             onUploadClick={() => triggerUpload('individual')}
             onGridUploadClick={() => triggerUpload('grid')}
@@ -64,17 +66,14 @@ function App() {
             gridDraft={gridDraft}
             onGridDraftChange={updateGridDraft}
             onGridGenerate={generateGridEmotes}
+            onGridAutoDetect={detectGridAutomatically}
             onGridCancel={closeGridDraft}
             isGeneratingGrid={isGeneratingGrid}
+            isDetectingGrid={isDetectingGrid}
             isEyedropperActive={isEyedropperActive}
-            tolerance={activeEmote?.tolerance || 30}
-            isAutoOutlineActive={activeEmote?.isAutoOutlineActive || false}
-            adjustments={activeEmote?.adjustments}
-            erasurePoints={activeEmote?.erasurePoints || []}
-            setErasurePoints={(updater) => updateActiveEmote({ erasurePoints: typeof updater === 'function' ? updater(activeEmote.erasurePoints) : updater })}
-            restorePoints={activeEmote?.restorePoints || []}
-            setRestorePoints={(updater) => updateActiveEmote({ restorePoints: typeof updater === 'function' ? updater(activeEmote.restorePoints) : updater })}
-            onProcessed={(src) => updateActiveEmote({ processedSrc: src })}
+            setErasurePoints={(updater) => updateActiveEmote({ erasurePoints: typeof updater === 'function' ? updater(activeEmote?.erasurePoints || []) : updater })}
+            setRestorePoints={(updater) => updateActiveEmote({ restorePoints: typeof updater === 'function' ? updater(activeEmote?.restorePoints || []) : updater })}
+            onPreviewReady={updateActivePreview}
             saveToHistory={saveToHistory}
           />
 
@@ -89,7 +88,7 @@ function App() {
                       : (isDark ? 'opacity-60 hover:opacity-100 ring-1 ring-[#7f6000]' : 'opacity-60 hover:opacity-100 ring-1 ring-gray-500')
                     }`}
                 >
-                  <img src={emote.processedSrc || emote.originalSrc} alt={emote.name} className="w-full h-full object-cover rounded-md" />
+                  <DocumentThumbnail emote={emote} asset={assets[emote.sourceId]} />
                   {emote.id === activeId && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRemoveActive(); }}
@@ -102,7 +101,7 @@ function App() {
               ))}
 
               <button
-                onClick={triggerUpload}
+                onClick={() => triggerUpload('individual')}
                 className={`w-16 h-16 flex-shrink-0 flex items-center justify-center rounded-lg border-2 border-dashed transition-colors ${isDark ? 'border-[#7f6000] hover:border-[#deb069] text-[#7f6000] hover:text-[#deb069]' : 'border-gray-300 hover:border-gray-500 text-gray-400'
                   }`}
               >
@@ -114,13 +113,41 @@ function App() {
 
         <SidebarRight
           theme={theme}
-          processedImage={activeEmote?.processedSrc || activeEmote?.originalSrc}
+          processedImage={activePreviewUrl}
           onExport={exportToZip}
           isExporting={isExporting}
           totalItems={emotes.length}
         />
 
       </div>
+    </div>
+  );
+}
+
+function DocumentThumbnail({ emote, asset }) {
+  if (!asset) {
+    return <div className="h-full w-full rounded-md bg-black/20" />;
+  }
+
+  const crop = emote.cropRect || { x: 0, y: 0, width: asset.width, height: asset.height };
+  const size = 64;
+  const scale = Math.min(size / crop.width, size / crop.height);
+  const width = Math.max(1, crop.width * scale);
+  const height = Math.max(1, crop.height * scale);
+
+  return (
+    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-md bg-black/20">
+      <div
+        aria-label={emote.name}
+        className="bg-no-repeat"
+        style={{
+          width,
+          height,
+          backgroundImage: `url("${asset.objectUrl}")`,
+          backgroundSize: `${asset.width * scale}px ${asset.height * scale}px`,
+          backgroundPosition: `${-crop.x * scale}px ${-crop.y * scale}px`,
+        }}
+      />
     </div>
   );
 }
