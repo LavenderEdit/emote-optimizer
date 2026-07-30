@@ -1,8 +1,9 @@
 export function applyProAdjustments(data, w, h, adjustments) {
     if (!adjustments) return;
 
-    const { brightness = 0, contrast = 0, saturation = 0, sharpen = 0 } = adjustments;
+    const { brightness = 0, contrast = 0, saturation = 0, sharpen = 0, levels = null } = adjustments;
     const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+    const resolvedLevels = normalizeLevels(levels);
 
     for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] === 0) continue;
@@ -20,6 +21,12 @@ export function applyProAdjustments(data, w, h, adjustments) {
             data[i] = Math.max(0, Math.min(255, gray + (r - gray) * (1 + saturation / 100)));
             data[i + 1] = Math.max(0, Math.min(255, gray + (g - gray) * (1 + saturation / 100)));
             data[i + 2] = Math.max(0, Math.min(255, gray + (b - gray) * (1 + saturation / 100)));
+        }
+
+        if (resolvedLevels) {
+            data[i] = applyLevels(data[i], resolvedLevels);
+            data[i + 1] = applyLevels(data[i + 1], resolvedLevels);
+            data[i + 2] = applyLevels(data[i + 2], resolvedLevels);
         }
     }
 
@@ -53,4 +60,29 @@ export function applyProAdjustments(data, w, h, adjustments) {
             }
         }
     }
+}
+
+export function normalizeLevels(levels) {
+    if (!levels) return null;
+    const inputBlack = clampByte(levels.inputBlack ?? 0);
+    const inputWhite = Math.max(inputBlack + 1, clampByte(levels.inputWhite ?? 255));
+    const gamma = Math.max(0.1, Math.min(5, Number(levels.gamma ?? 1)));
+    const outputBlack = clampByte(levels.outputBlack ?? 0);
+    const outputWhite = Math.max(outputBlack, clampByte(levels.outputWhite ?? 255));
+
+    if (inputBlack === 0 && inputWhite === 255 && gamma === 1 && outputBlack === 0 && outputWhite === 255) {
+        return null;
+    }
+
+    return { inputBlack, inputWhite, gamma, outputBlack, outputWhite };
+}
+
+function applyLevels(value, levels) {
+    const normalized = Math.max(0, Math.min(1, (value - levels.inputBlack) / (levels.inputWhite - levels.inputBlack)));
+    const corrected = Math.pow(normalized, 1 / levels.gamma);
+    return Math.max(0, Math.min(255, levels.outputBlack + corrected * (levels.outputWhite - levels.outputBlack)));
+}
+
+function clampByte(value) {
+    return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid2X2, Image as ImageIcon, Pipette, Wand2, Settings2, SunMedium, Contrast, Palette, Zap } from 'lucide-react';
+import { Grid2X2, Image as ImageIcon, Pipette, Wand2, Settings2, SunMedium, Contrast, Palette, Zap, SlidersHorizontal } from 'lucide-react';
 import ToolButton from '../ui/ToolButton';
 
 export default function SidebarLeft({
@@ -17,6 +17,7 @@ export default function SidebarLeft({
     hasImage
 }) {
     const isDark = theme === 'dark';
+    const levels = adjustments?.levels || { inputBlack: 0, inputWhite: 255, gamma: 1, outputBlack: 0, outputWhite: 255 };
 
     return (
         <aside className={`w-16 flex flex-col items-center py-4 border-r gap-4 overflow-y-auto no-scrollbar ${isDark ? 'border-[#7f6000] bg-[#3d2304]' : 'border-gray-300 bg-white'}`}>
@@ -92,6 +93,21 @@ export default function SidebarLeft({
                         icon={<Zap size={14} className={isDark ? "text-[#deb069]/70" : "text-gray-500"} />}
                         label="Enfoque" value={adjustments.sharpen} min={0} max={100}
                         onChange={(v) => onAdjustmentsChange({ ...adjustments, sharpen: v })} isDark={isDark}
+                    />
+                    <CompactSlider
+                        icon={<SlidersHorizontal size={14} className={isDark ? "text-[#deb069]/70" : "text-gray-500"} />}
+                        label="Nivel negro" value={levels.inputBlack} min={0} max={240}
+                        onChange={(v) => onAdjustmentsChange({ ...adjustments, levels: { ...levels, inputBlack: v } })} isDark={isDark}
+                    />
+                    <CompactSlider
+                        icon={<SlidersHorizontal size={14} className={isDark ? "text-[#deb069]/70" : "text-gray-500"} />}
+                        label="Nivel blanco" value={levels.inputWhite} min={16} max={255}
+                        onChange={(v) => onAdjustmentsChange({ ...adjustments, levels: { ...levels, inputWhite: v } })} isDark={isDark}
+                    />
+                    <CompactSlider
+                        icon={<SlidersHorizontal size={14} className={isDark ? "text-[#deb069]/70" : "text-gray-500"} />}
+                        label="Gamma" value={Math.round(levels.gamma * 100)} min={40} max={250}
+                        onChange={(v) => onAdjustmentsChange({ ...adjustments, levels: { ...levels, gamma: v / 100 } })} isDark={isDark}
                     />
                 </div>
             )}

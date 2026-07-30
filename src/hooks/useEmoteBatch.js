@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { buildEmotesZip, createValidatedEmoteOutput, getOutputRules, getPresetById } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
+import { createEmoteVariant } from '../features/editor/model/variants';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
 import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
@@ -192,10 +193,13 @@ export function useEmoteBatch() {
     const [selectedEmoteIds, setSelectedEmoteIds] = useState([]);
     const [settingsClipboard, setSettingsClipboard] = useState(null);
     const [comparisonMode, setComparisonMode] = useState('after');
+    const [activeMetrics, setActiveMetrics] = useState(null);
     const [exportOptions, setExportOptions] = useState({
         presetId: 'twitch-static-manual',
         scope: 'all',
         activeOutputSize: 112,
+        customSize: 512,
+        includeContactSheet: false,
     });
     const [exportState, setExportState] = useState({
         status: 'idle',
@@ -220,6 +224,7 @@ export function useEmoteBatch() {
     const activeEmote = emotes.find(e => e.id === activeId);
     const activeAsset = activeEmote ? assets[activeEmote.sourceId] : null;
     const activePreviewUrl = activeEmote ? previewUrls[activeEmote.id] : null;
+    const visibleActiveMetrics = activeMetrics?.emoteId === activeId ? activeMetrics.metrics : null;
     const performanceStats = useMemo(() => createPerformanceSummary({
         assets,
         emotes,
@@ -284,6 +289,7 @@ export function useEmoteBatch() {
         setAssets({});
         setEmotes([]);
         setPreviewUrls({});
+        setActiveMetrics(null);
         setGridDraft(null);
         setActiveId(null);
         setSelectedEmoteIds([]);
@@ -317,6 +323,7 @@ export function useEmoteBatch() {
         setAssets(project.assets || {});
         setEmotes(project.emotes || []);
         setPreviewUrls({});
+        setActiveMetrics(null);
         setGridDraft(project.gridDraft || null);
         setActiveId(project.activeId || project.emotes?.[0]?.id || null);
         setSelectedEmoteIds(project.selectedEmoteIds || []);
@@ -427,6 +434,19 @@ export function useEmoteBatch() {
         )));
         clearPreviewsForIds(selectedEmoteIds);
     }, [activeEmote, clearPreviewsForIds, selectedEmoteIds]);
+
+    const createVariantFromActive = useCallback((label = 'variant') => {
+        if (!activeId) return null;
+        const baseEmote = emotesRef.current.find((emote) => emote.id === activeId);
+        if (!baseEmote) return null;
+        const createdVariant = createEmoteVariant(baseEmote, emotesRef.current, label);
+        const nextEmotes = [...emotesRef.current, createdVariant];
+        emotesRef.current = nextEmotes;
+        setEmotes(nextEmotes);
+        setActiveId(createdVariant.id);
+        setSelectedEmoteIds([createdVariant.id]);
+        return createdVariant;
+    }, [activeId]);
 
     const updateBackgroundRemovalV2Params = useCallback((updates) => {
         updateSelectedOrActiveEmotes((emote) => ({
@@ -606,6 +626,11 @@ export function useEmoteBatch() {
         });
     }, []);
 
+    const updateActiveMetrics = useCallback((emoteId, metrics) => {
+        if (emoteId !== activeId) return;
+        setActiveMetrics({ emoteId, metrics });
+    }, [activeId]);
+
     const updateGridDraft = useCallback((updater) => {
         setGridDraft((current) => {
             if (!current) return current;
@@ -698,6 +723,7 @@ export function useEmoteBatch() {
         });
         setSelectedEmoteIds((currentSelection) => currentSelection.filter((id) => id !== current?.id));
         setActiveId(next[0]?.id || null);
+        setActiveMetrics(null);
         setIsEyedropperActive(false);
     };
 
@@ -970,7 +996,7 @@ export function useEmoteBatch() {
     const downloadActivePng = useCallback(async () => {
         if (!activeEmote || !activeAsset) return;
         const preset = getPresetById(exportOptions.presetId);
-        const outputRules = getOutputRules(preset, activeEmote, activeAsset);
+        const outputRules = getOutputRules(preset, activeEmote, activeAsset, exportOptions);
         const outputRule = preset.id === 'twitch-static-manual'
             ? outputRules.find((rule) => rule.width === exportOptions.activeOutputSize) || outputRules[0]
             : outputRules[0];
@@ -1065,7 +1091,7 @@ export function useEmoteBatch() {
             error: null,
         });
         return { encoded, validation };
-    }, [activeAsset, activeEmote, exportOptions.activeOutputSize, exportOptions.presetId]);
+    }, [activeAsset, activeEmote, exportOptions]);
 
     const exportToZip = prepareExport;
 
@@ -1076,8 +1102,8 @@ export function useEmoteBatch() {
         assets,
         activeId, setActiveId,
         selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
-        activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
-        copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
+        activeEmote, activeAsset, activePreviewUrl, activeMetrics: visibleActiveMetrics, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview, updateActiveMetrics,
+        copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, createVariantFromActive, settingsClipboard,
         trimSelectedEmotes, isTrimmingBatch,
         applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
         comparisonMode, setComparisonMode,

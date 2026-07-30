@@ -27,6 +27,7 @@ export default function CanvasArea({
     setErasurePoints,
     setRestorePoints,
     onPreviewReady,
+    onMetricsReady,
     saveToHistory
 }) {
     const isDark = theme === 'dark';
@@ -36,6 +37,7 @@ export default function CanvasArea({
         emote,
         asset,
         onPreviewReady,
+        onMetricsReady,
         comparisonMode,
     });
 

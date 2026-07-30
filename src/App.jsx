@@ -14,8 +14,8 @@ function App() {
     assets,
     activeId, setActiveId,
     selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
-    activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
-    copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
+    activeEmote, activeAsset, activePreviewUrl, activeMetrics, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview, updateActiveMetrics,
+    copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, createVariantFromActive, settingsClipboard,
     trimSelectedEmotes, isTrimmingBatch,
     applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
     comparisonMode, setComparisonMode,
@@ -83,6 +83,7 @@ function App() {
             setErasurePoints={(updater) => updateActiveEmote({ erasurePoints: typeof updater === 'function' ? updater(activeEmote?.erasurePoints || []) : updater })}
             setRestorePoints={(updater) => updateActiveEmote({ restorePoints: typeof updater === 'function' ? updater(activeEmote?.restorePoints || []) : updater })}
             onPreviewReady={updateActivePreview}
+            onMetricsReady={updateActiveMetrics}
             saveToHistory={saveToHistory}
           />
 
@@ -105,6 +106,7 @@ function App() {
           theme={theme}
           activeEmote={activeEmote}
           processedImage={activePreviewUrl}
+          activeMetrics={activeMetrics}
           performanceStats={performanceStats}
           onExport={exportToZip}
           isExporting={isExporting}
@@ -129,6 +131,7 @@ function App() {
           onCopySettings={copyActiveSettings}
           onPasteSettings={pasteSettingsToSelected}
           onApplyActiveSettings={applyActiveSettingsToSelected}
+          onCreateVariant={createVariantFromActive}
           onTrimSelected={trimSelectedEmotes}
           isTrimmingBatch={isTrimmingBatch}
           onApplyBackgroundV2={applyBackgroundRemovalV2}

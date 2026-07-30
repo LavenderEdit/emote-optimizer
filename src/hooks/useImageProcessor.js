@@ -1,17 +1,27 @@
 import { useEffect, useRef } from 'react';
 import { renderEmoteMasterCanvas, canvasToBlob, loadImageElement } from '../features/editor/imagePipeline/renderEmote';
 import { createPreviewCacheKey, previewCache } from '../features/performance/previewCache';
+import { startImageMetricsAnalysis } from '../features/performance/imageMetricsWorkerClient';
 
 export function useImageProcessor({
     emote,
     asset,
     onPreviewReady,
+    onMetricsReady,
     comparisonMode = 'after',
 }) {
     const canvasRef = useRef(null);
+    const metricsRequestRef = useRef(null);
 
     useEffect(() => {
         let cancelled = false;
+        metricsRequestRef.current?.cancel?.();
+        let effectMetricsRequest = null;
+
+        const queueEffectMetrics = (canvas) => {
+            effectMetricsRequest?.cancel?.();
+            effectMetricsRequest = queueMetrics(canvas, emote, asset, onMetricsReady, metricsRequestRef, () => cancelled);
+        };
 
         async function render() {
             if (!emote || !asset || !canvasRef.current) return;
@@ -26,6 +36,7 @@ export function useImageProcessor({
                     if (cancelled || !canvasRef.current) return;
                     drawToVisibleCanvas(canvasRef.current, cachedImage);
                     if (onPreviewReady) onPreviewReady(emote.id, cachedPreview.blob, { cacheHit: true, cacheKey });
+                    if (onMetricsReady) queueEffectMetrics(canvasRef.current);
                     return;
                 } catch {
                     previewCache.delete(cacheKey);
@@ -56,6 +67,10 @@ export function useImageProcessor({
                     console.error('No se pudo crear preview del emote:', error);
                 }
             }
+
+            if (!cancelled && comparisonMode === 'after' && onMetricsReady) {
+                queueEffectMetrics(canvas);
+            }
         }
 
         render().catch((error) => {
@@ -64,8 +79,9 @@ export function useImageProcessor({
 
         return () => {
             cancelled = true;
+            effectMetricsRequest?.cancel?.();
         };
-    }, [emote, asset, onPreviewReady, comparisonMode]);
+    }, [emote, asset, onPreviewReady, onMetricsReady, comparisonMode]);
 
     return { canvasRef };
 }
@@ -76,4 +92,23 @@ function drawToVisibleCanvas(canvas, image) {
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0);
+}
+
+function queueMetrics(canvas, emote, asset, onMetricsReady, metricsRequestRef, isCancelled) {
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const sourceId = `${asset.id}:${emote.id}`;
+    const request = startImageMetricsAnalysis({ imageData, sourceId });
+    metricsRequestRef.current = request;
+    request.promise
+        .then((metrics) => {
+            if (isCancelled() || metricsRequestRef.current?.requestId !== request.requestId) return;
+            onMetricsReady(emote.id, metrics);
+        })
+        .catch((error) => {
+            if (!isCancelled() && error.name !== 'AbortError') {
+                console.error('No se pudieron calcular metricas de imagen:', error);
+            }
+        });
+    return request;
 }

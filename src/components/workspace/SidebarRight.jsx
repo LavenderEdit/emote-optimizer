@@ -8,6 +8,7 @@ export default function SidebarRight({
     theme,
     activeEmote,
     processedImage,
+    activeMetrics,
     performanceStats,
     onExport,
     isExporting,
@@ -32,6 +33,7 @@ export default function SidebarRight({
     onCopySettings,
     onPasteSettings,
     onApplyActiveSettings,
+    onCreateVariant,
     onTrimSelected,
     isTrimmingBatch,
     onApplyBackgroundV2,
@@ -50,6 +52,7 @@ export default function SidebarRight({
         : 'rounded border border-purple-600 bg-purple-600 px-2 py-1.5 text-xs text-white';
     const targetLabel = selectedCount > 0 ? `${selectedCount} seleccionados` : 'Activo';
     const frame = activeEmote?.frame || { zoom: 1, offsetX: 0, offsetY: 0 };
+    const shadowEnabled = Boolean(activeEmote?.outline?.shadow?.enabled);
     const paddingPercent = Math.round((activeEmote?.padding || 0) * 100);
     const offsetXPercent = Math.round((frame.offsetX || 0) * 100);
     const offsetYPercent = Math.round((frame.offsetY || 0) * 100);
@@ -65,6 +68,7 @@ export default function SidebarRight({
     };
     const canDownloadPrepared = exportState?.downloadUrl && (exportState.status === 'valid' || exportState.status === 'invalid');
     const isManualExportPreset = (exportOptions?.presetId || 'twitch-static-manual') === 'twitch-static-manual';
+    const isCustomPngPreset = exportOptions?.presetId === 'png-custom';
     const exportProgressLabel = exportState?.status === 'compressing'
         ? 'Finalizando ZIP'
         : `Progreso: ${exportState?.progress?.processedFiles || 0}/${exportState?.progress?.totalFiles || 0} archivos`;
@@ -104,6 +108,23 @@ export default function SidebarRight({
                             {performanceStats.warning && (
                                 <div className={`mt-2 rounded border px-2 py-1 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'}`}>
                                     {performanceStats.warning}
+                                </div>
+                            )}
+                            {activeMetrics?.histogram?.luma && (
+                                <div className="mt-3" data-testid="active-luma-histogram">
+                                    <div className={`mb-1 flex justify-between ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
+                                        <span>Histograma</span>
+                                        <span>{Math.round(activeMetrics.visibleRatio * 100)}% visible</span>
+                                    </div>
+                                    <div className="flex h-10 items-end gap-px">
+                                        {createHistogramBars(activeMetrics.histogram.luma).map((height, index) => (
+                                            <div
+                                                key={index}
+                                                className={isDark ? 'bg-[#deb069]/70' : 'bg-purple-500/70'}
+                                                style={{ height: `${height}%`, flex: 1 }}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -265,6 +286,9 @@ export default function SidebarRight({
                         <button type="button" className={buttonClass} onClick={onPasteSettings} disabled={!hasSettingsClipboard}>
                             Pegar
                         </button>
+                        <button type="button" className={buttonClass} onClick={() => onCreateVariant?.('variant')} disabled={!activeEmote}>
+                            Variante
+                        </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyActiveSettings(['fit'])} disabled={!activeEmote || selectedCount === 0}>
                             Fit
                         </button>
@@ -276,6 +300,26 @@ export default function SidebarRight({
                         </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyActiveSettings(['outline'])} disabled={!activeEmote || selectedCount === 0}>
                             Outline
+                        </button>
+                        <button
+                            type="button"
+                            className={shadowEnabled ? activeButtonClass : buttonClass}
+                            onClick={() => onUpdateTargets({
+                                outline: {
+                                    ...(activeEmote?.outline || {}),
+                                    shadow: {
+                                        enabled: !shadowEnabled,
+                                        offsetX: 2,
+                                        offsetY: 2,
+                                        blur: 2,
+                                        opacity: 0.35,
+                                        color: [0, 0, 0],
+                                    },
+                                },
+                            })}
+                            disabled={!activeEmote}
+                        >
+                            Sombra
                         </button>
                     </div>
 
@@ -305,8 +349,19 @@ export default function SidebarRight({
                         >
                             <option value="twitch-static-manual">Twitch manual 112/56/28</option>
                             <option value="twitch-static-auto">Twitch auto-resize maestro</option>
+                            <option value="png-custom">PNG personalizado</option>
                         </select>
                     </label>
+                    {isCustomPngPreset && (
+                        <RangeField
+                            label="Tamano PNG"
+                            value={exportOptions?.customSize || 512}
+                            min={28}
+                            max={1024}
+                            isDark={isDark}
+                            onChange={(customSize) => onExportOptionsChange({ customSize })}
+                        />
+                    )}
                     {isManualExportPreset && (
                         <div>
                             <span className={`mb-1 block text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>PNG activo</span>
@@ -336,6 +391,15 @@ export default function SidebarRight({
                             <option value="selected">Seleccionados</option>
                             <option value="all">Todos</option>
                         </select>
+                    </label>
+                    <label className={`flex items-center gap-2 text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
+                        <input
+                            type="checkbox"
+                            checked={Boolean(exportOptions?.includeContactSheet)}
+                            onChange={(event) => onExportOptionsChange({ includeContactSheet: event.target.checked })}
+                            className={isDark ? 'accent-[#c41026]' : 'accent-purple-600'}
+                        />
+                        Hoja de contacto
                     </label>
                     {exportState?.summary && (
                         <div className={`rounded border px-2 py-2 text-xs ${exportState.summary.invalidOutputs > 0
@@ -391,6 +455,17 @@ export default function SidebarRight({
             </div>
         </aside>
     );
+}
+
+function createHistogramBars(lumaHistogram, buckets = 32) {
+    const bucketSize = Math.ceil(lumaHistogram.length / buckets);
+    const values = Array.from({ length: buckets }, (_, bucket) => {
+        const start = bucket * bucketSize;
+        const end = Math.min(lumaHistogram.length, start + bucketSize);
+        return lumaHistogram.slice(start, end).reduce((sum, value) => sum + value, 0);
+    });
+    const maxValue = Math.max(1, ...values);
+    return values.map((value) => Math.max(4, Math.round((value / maxValue) * 100)));
 }
 
 function RangeField({ label, value, min, max, onChange, isDark }) {
