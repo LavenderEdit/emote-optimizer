@@ -19,6 +19,7 @@ function App() {
     trimSelectedEmotes, isTrimmingBatch,
     applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
     comparisonMode, setComparisonMode,
+    projectPersistence,
     exportOptions, updateExportOptions, exportState, prepareExport, cancelExport, retryExport, downloadPreparedExport, downloadActivePng,
     gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
     isEyedropperActive, setIsEyedropperActive,
@@ -41,7 +42,7 @@ function App() {
     <div className={`h-screen w-full flex flex-col font-sans ${isDark ? 'bg-[#3d0604] text-[#deb069]' : 'bg-gray-100 text-gray-900'}`}>
       <input type="file" ref={fileInputRef} onChange={handleFileInput} accept="image/png, image/jpeg, image/webp" multiple className="hidden" />
 
-      <Header theme={theme} toggleTheme={() => setTheme(isDark ? 'light' : 'dark')} />
+      <Header theme={theme} toggleTheme={() => setTheme(isDark ? 'light' : 'dark')} projectPersistence={projectPersistence} />
 
       <div className="flex-1 flex overflow-hidden">
 

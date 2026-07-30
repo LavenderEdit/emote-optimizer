@@ -1,7 +1,8 @@
 import React from 'react';
 import { Moon, Sun } from 'lucide-react';
+import ProjectManager from '../../features/projects/components/ProjectManager';
 
-export default function Header({ theme, toggleTheme }) {
+export default function Header({ theme, toggleTheme, projectPersistence }) {
     const isDark = theme === 'dark';
 
     return (
@@ -14,6 +15,9 @@ export default function Header({ theme, toggleTheme }) {
             </div>
 
             <div className="flex items-center gap-4">
+                {projectPersistence && (
+                    <ProjectManager theme={theme} projectPersistence={projectPersistence} />
+                )}
                 <button
                     onClick={toggleTheme}
                     className={`p-2 rounded-md transition-colors ${isDark ? 'hover:bg-[#7f6000]/30 text-[#deb069]' : 'hover:bg-gray-200 text-gray-600'}`}
