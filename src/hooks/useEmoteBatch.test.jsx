@@ -42,6 +42,15 @@ vi.mock('../features/editor/imagePipeline/trimContent', () => ({
 }));
 
 vi.mock('../features/editor/imagePipeline/backgroundRemovalV2', () => ({
+    DEFAULT_BACKGROUND_REMOVAL_V2: {
+        version: 2,
+        mode: 'connected',
+        tolerance: 34,
+        feather: 1,
+        despill: 0.75,
+        excessiveRemovalThreshold: 0.72,
+        brushRadius: 10,
+    },
     analyzeEmoteBackgroundRemovalV2: backgroundV2Mock.analyzeEmoteBackgroundRemovalV2,
 }));
 
@@ -52,6 +61,7 @@ describe('useEmoteBatch', () => {
         trimMock.trimEmoteToContent.mockReset();
         backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockReset();
         vi.stubGlobal('alert', vi.fn());
+        vi.stubGlobal('confirm', vi.fn(() => true));
         vi.stubGlobal('Image', class {
             set src(value) {
                 this._src = value;
@@ -327,5 +337,135 @@ describe('useEmoteBatch', () => {
         expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledTimes(24);
         expect(result.current.emotes.every((emote) => emote.backgroundRemoval.version === 2)).toBe(true);
         expect(new Set(result.current.emotes.map((emote) => JSON.stringify(emote.backgroundRemoval.samples)))).toHaveLength(24);
+    });
+
+    it('recalculates background removal v2 without keeping stale background warnings', async () => {
+        backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockResolvedValue({
+            backgroundRemoval: {
+                version: 2,
+                mode: 'connected',
+                tolerance: 34,
+                samples: [[255, 255, 255]],
+                removedRatio: 0.9,
+                removedPixels: 900,
+                warnings: ['Borrado excesivo: 90% de pixeles quedarian transparentes.'],
+            },
+            warnings: ['Borrado excesivo: 90% de pixeles quedarian transparentes.'],
+        });
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.updateActiveEmote({
+                validation: {
+                    errors: [],
+                    warnings: [
+                        { category: 'backgroundRemoval', code: 'old-background', message: 'warning viejo' },
+                        { category: 'trim', code: 'trim-touching-edge', message: 'warning de trim' },
+                    ],
+                },
+            });
+        });
+        await act(async () => {
+            await result.current.applyBackgroundRemovalV2('active', 'connected');
+        });
+
+        const warnings = result.current.activeEmote.validation.warnings;
+        expect(warnings.some((warning) => warning.message === 'warning viejo')).toBe(false);
+        expect(warnings.some((warning) => warning.message === 'warning de trim')).toBe(true);
+        expect(warnings.some((warning) => warning.category === 'backgroundRemoval' && warning.code === 'background-removal-v2-excessive')).toBe(true);
+    });
+
+    it('resets and removes background removal v2 state', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.updateActiveEmote({
+                backgroundRemoval: { version: 2, mode: 'connected', tolerance: 80, removedRatio: 0.8 },
+                validation: { errors: [], warnings: [{ category: 'backgroundRemoval', code: 'old', message: 'old' }] },
+            });
+        });
+        await act(async () => {
+            result.current.resetBackgroundRemovalV2();
+        });
+
+        expect(result.current.activeEmote.backgroundRemoval.version).toBe(2);
+        expect(result.current.activeEmote.backgroundRemoval.tolerance).toBe(34);
+        expect(result.current.activeEmote.validation.warnings).toEqual([]);
+
+        await act(async () => {
+            result.current.removeBackgroundRemovalV2();
+        });
+
+        expect(result.current.activeEmote.backgroundRemoval.mode).toBe('manual-flood-fill');
+        expect(result.current.activeEmote.backgroundRemoval.version).toBeUndefined();
+    });
+
+    it('updates feather and despill parameters visibly on selected targets', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.selectNoEmotes();
+            result.current.toggleEmoteSelection(result.current.emotes[0].id);
+            result.current.toggleEmoteSelection(result.current.emotes[1].id);
+        });
+        await act(async () => {
+            result.current.updateBackgroundRemovalV2Params({ feather: 3, despill: 0.2 });
+        });
+
+        expect(result.current.emotes[0].backgroundRemoval.feather).toBe(3);
+        expect(result.current.emotes[1].backgroundRemoval.despill).toBe(0.2);
+        expect(result.current.emotes[2].backgroundRemoval.version).toBeUndefined();
+    });
+
+    it('requires explicit confirmation before applying global background removal', async () => {
+        vi.mocked(globalThis.confirm).mockReturnValue(false);
+        backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockResolvedValue({
+            backgroundRemoval: { version: 2, mode: 'global', samples: [], removedRatio: 0, removedPixels: 0, warnings: [] },
+            warnings: [],
+        });
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        let accepted = true;
+        await act(async () => {
+            accepted = await result.current.applyBackgroundRemovalV2('active', 'global');
+        });
+
+        expect(accepted).toBe(false);
+        expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).not.toHaveBeenCalled();
+
+        await act(async () => {
+            accepted = await result.current.applyBackgroundRemovalV2('active', 'global', { globalConfirmed: true });
+        });
+
+        expect(accepted).toBe(true);
+        expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledTimes(1);
     });
 });

@@ -25,6 +25,10 @@ export default function SidebarRight({
     onTrimSelected,
     isTrimmingBatch,
     onApplyBackgroundV2,
+    onUpdateBackgroundV2Params,
+    onResetBackgroundV2,
+    onRemoveBackgroundV2,
+    onApplyBackgroundV2Params,
     isApplyingBackgroundV2,
 }) {
     const isDark = theme === 'dark';
@@ -42,6 +46,13 @@ export default function SidebarRight({
     const removedPercent = activeEmote?.backgroundRemoval?.version === 2
         ? Math.round((activeEmote.backgroundRemoval.removedRatio || 0) * 100)
         : null;
+    const backgroundV2 = {
+        tolerance: activeEmote?.backgroundRemoval?.tolerance ?? activeEmote?.tolerance ?? 34,
+        feather: activeEmote?.backgroundRemoval?.feather ?? 1,
+        despill: activeEmote?.backgroundRemoval?.despill ?? 0.75,
+        brushRadius: activeEmote?.backgroundRemoval?.brushRadius ?? 10,
+        excessiveRemovalThreshold: activeEmote?.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
+    };
 
     return (
         <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
@@ -68,6 +79,46 @@ export default function SidebarRight({
                     <div className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
                         {removedPercent == null ? 'Sin mascara v2 activa' : `${removedPercent}% removido`}
                     </div>
+                    <RangeField
+                        label="Tolerancia"
+                        value={backgroundV2.tolerance}
+                        min={0}
+                        max={120}
+                        isDark={isDark}
+                        onChange={(tolerance) => onUpdateBackgroundV2Params({ tolerance })}
+                    />
+                    <RangeField
+                        label="Feather"
+                        value={backgroundV2.feather}
+                        min={0}
+                        max={3}
+                        isDark={isDark}
+                        onChange={(feather) => onUpdateBackgroundV2Params({ feather })}
+                    />
+                    <RangeField
+                        label="Despill %"
+                        value={Math.round(backgroundV2.despill * 100)}
+                        min={0}
+                        max={100}
+                        isDark={isDark}
+                        onChange={(despill) => onUpdateBackgroundV2Params({ despill: despill / 100 })}
+                    />
+                    <RangeField
+                        label="Pincel"
+                        value={backgroundV2.brushRadius}
+                        min={1}
+                        max={48}
+                        isDark={isDark}
+                        onChange={(brushRadius) => onUpdateBackgroundV2Params({ brushRadius })}
+                    />
+                    <RangeField
+                        label="Max borrado %"
+                        value={Math.round(backgroundV2.excessiveRemovalThreshold * 100)}
+                        min={25}
+                        max={95}
+                        isDark={isDark}
+                        onChange={(excessiveRemovalThreshold) => onUpdateBackgroundV2Params({ excessiveRemovalThreshold: excessiveRemovalThreshold / 100 })}
+                    />
                     <div className="grid grid-cols-2 gap-1">
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('active', 'connected')} disabled={!activeEmote || isApplyingBackgroundV2}>
                             {isApplyingBackgroundV2 ? <Loader2 size={13} className="inline animate-spin" /> : <Wand2 size={13} className="inline" />} Activo
@@ -79,8 +130,30 @@ export default function SidebarRight({
                             Todos
                         </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2(selectedCount > 0 ? 'targets' : 'active', 'global')} disabled={!activeEmote || isApplyingBackgroundV2}>
-                            Global
+                            Global agresivo
                         </button>
+                    </div>
+                    <div className={`rounded border px-2 py-1 text-[11px] ${isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'}`}>
+                        Global puede eliminar ojos, dientes, texto y brillos blancos. Connected es el modo recomendado.
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2(selectedCount > 0 ? 'targets' : 'active', activeEmote?.backgroundRemoval?.mode || 'connected')} disabled={!activeEmote || isApplyingBackgroundV2}>
+                            Recalcular
+                        </button>
+                        <button type="button" className={buttonClass} onClick={onResetBackgroundV2} disabled={!activeEmote}>
+                            Restablecer
+                        </button>
+                        <button type="button" className={buttonClass} onClick={onRemoveBackgroundV2} disabled={!activeEmote}>
+                            Quitar v2
+                        </button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2Params(selectedCount > 0 ? 'targets' : 'all')} disabled={!activeEmote}>
+                            Aplicar params
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2Params('active')} disabled={!activeEmote}>Params activo</button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2Params('targets')} disabled={!activeEmote || selectedCount === 0}>Params sel.</button>
+                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2Params('all')} disabled={!activeEmote || totalItems === 0}>Params todos</button>
                     </div>
                 </div>
 

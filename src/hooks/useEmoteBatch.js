@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { generateEmotesZip } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
-import { analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
+import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
@@ -18,10 +18,13 @@ function formatValidationMessages(messages) {
 }
 
 function mergeEmoteUpdates(emote, updates) {
-    const backgroundRemoval = {
-        ...emote.backgroundRemoval,
-        ...(updates.backgroundRemoval || {}),
-    };
+    const { replaceBackgroundRemoval, ...restUpdates } = updates;
+    const backgroundRemoval = replaceBackgroundRemoval
+        ? { ...(updates.backgroundRemoval || {}) }
+        : {
+            ...emote.backgroundRemoval,
+            ...(updates.backgroundRemoval || {}),
+        };
 
     if ('erasurePoints' in updates) backgroundRemoval.erasurePoints = updates.erasurePoints;
     if ('restorePoints' in updates) backgroundRemoval.restorePoints = updates.restorePoints;
@@ -36,7 +39,7 @@ function mergeEmoteUpdates(emote, updates) {
 
     return {
         ...emote,
-        ...updates,
+        ...restUpdates,
         backgroundRemoval,
         outline,
         erasurePoints: backgroundRemoval.erasurePoints || [],
@@ -91,8 +94,49 @@ function mergeValidationWarnings(validation, warnings) {
     };
 }
 
+function createValidationWarning(category, code, message) {
+    return { category, code, message };
+}
+
+function warningCategory(warning) {
+    return typeof warning === 'object' && warning !== null ? warning.category : null;
+}
+
+function replaceValidationWarnings(validation, category, warnings) {
+    const keptWarnings = (validation?.warnings || []).filter((warning) => warningCategory(warning) !== category);
+    return {
+        errors: validation?.errors || [],
+        warnings: [...keptWarnings, ...warnings],
+    };
+}
+
 function hasWarnings(emote) {
     return (emote.validation?.warnings?.length || 0) > 0 || (emote.validation?.errors?.length || 0) > 0;
+}
+
+function createDefaultBackgroundRemovalV2() {
+    return {
+        ...DEFAULT_BACKGROUND_REMOVAL_V2,
+        samples: [],
+        removedRatio: 0,
+        removedPixels: 0,
+        warnings: [],
+        erasurePoints: [],
+        restorePoints: [],
+    };
+}
+
+function createManualBackgroundRemoval() {
+    return {
+        mode: 'manual-flood-fill',
+        tolerance: 30,
+        erasurePoints: [],
+        restorePoints: [],
+    };
+}
+
+function createBackgroundWarning(message, code = 'background-removal-v2') {
+    return createValidationWarning('backgroundRemoval', code, message);
 }
 
 async function createValidatedAsset(file) {
@@ -250,6 +294,68 @@ export function useEmoteBatch() {
         clearPreviewsForIds(selectedEmoteIds);
     }, [activeEmote, clearPreviewsForIds, selectedEmoteIds]);
 
+    const updateBackgroundRemovalV2Params = useCallback((updates) => {
+        updateSelectedOrActiveEmotes((emote) => ({
+            backgroundRemoval: {
+                ...createDefaultBackgroundRemovalV2(),
+                ...(emote.backgroundRemoval?.version === 2 ? emote.backgroundRemoval : {}),
+                ...updates,
+                version: 2,
+                samples: updates.samples ?? emote.backgroundRemoval?.samples ?? [],
+                erasurePoints: emote.backgroundRemoval?.erasurePoints || [],
+                restorePoints: emote.backgroundRemoval?.restorePoints || [],
+            },
+        }));
+    }, [updateSelectedOrActiveEmotes]);
+
+    const resetBackgroundRemovalV2 = useCallback(() => {
+        updateSelectedOrActiveEmotes((emote) => ({
+            backgroundRemoval: createDefaultBackgroundRemovalV2(),
+            erasurePoints: [],
+            restorePoints: [],
+            validation: replaceValidationWarnings(emote.validation, 'backgroundRemoval', []),
+        }));
+    }, [updateSelectedOrActiveEmotes]);
+
+    const removeBackgroundRemovalV2 = useCallback(() => {
+        updateSelectedOrActiveEmotes((emote) => ({
+            backgroundRemoval: createManualBackgroundRemoval(),
+            replaceBackgroundRemoval: true,
+            erasurePoints: [],
+            restorePoints: [],
+            validation: replaceValidationWarnings(emote.validation, 'backgroundRemoval', []),
+        }));
+    }, [updateSelectedOrActiveEmotes]);
+
+    const applyBackgroundRemovalV2Params = useCallback((scope = 'targets') => {
+        if (!activeEmote) return;
+        const patch = {
+            backgroundRemoval: {
+                ...createDefaultBackgroundRemovalV2(),
+                ...(activeEmote.backgroundRemoval?.version === 2 ? activeEmote.backgroundRemoval : {}),
+                samples: [],
+                removedRatio: 0,
+                removedPixels: 0,
+                warnings: [],
+                erasurePoints: [],
+                restorePoints: [],
+            },
+            erasurePoints: [],
+            restorePoints: [],
+        };
+        const targetIds = scope === 'all'
+            ? emotesRef.current.map((emote) => emote.id)
+            : scope === 'active'
+                ? [activeEmote.id]
+                : selectedEmoteIds;
+        if (targetIds.length === 0) return;
+        const targetSet = new Set(targetIds);
+        setEmotes((current) => current.map((emote) => (
+            targetSet.has(emote.id) ? mergeEmoteUpdates(emote, cloneSettings(patch)) : emote
+        )));
+        clearPreviewsForIds(targetIds);
+    }, [activeEmote, clearPreviewsForIds, selectedEmoteIds]);
+
     const trimSelectedEmotes = useCallback(async () => {
         const targetIds = getTargetEmoteIds();
         if (targetIds.length === 0) return;
@@ -290,7 +396,13 @@ export function useEmoteBatch() {
         }
     }, [clearPreviewsForIds, getTargetEmoteIds]);
 
-    const applyBackgroundRemovalV2 = useCallback(async (scope = 'targets', mode = 'connected') => {
+    const applyBackgroundRemovalV2 = useCallback(async (scope = 'targets', mode = 'connected', options = {}) => {
+        if (mode === 'global' && !options.globalConfirmed) {
+            const accepted = typeof window === 'undefined'
+                ? false
+                : window.confirm('Global es agresivo: puede eliminar ojos, dientes, texto y brillos blancos. Usa Connected por defecto. Continuar?');
+            if (!accepted) return false;
+        }
         const targetIds = scope === 'all'
             ? emotesRef.current.map((emote) => emote.id)
             : scope === 'active'
@@ -318,7 +430,10 @@ export function useEmoteBatch() {
                         tolerance: emote.backgroundRemoval?.tolerance ?? emote.tolerance ?? 34,
                         feather: emote.backgroundRemoval?.feather ?? 1,
                         despill: emote.backgroundRemoval?.despill ?? 0.75,
+                        brushRadius: emote.backgroundRemoval?.brushRadius ?? 10,
+                        excessiveRemovalThreshold: emote.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
                     });
+                    const backgroundWarnings = analysis.warnings.map((warning) => createBackgroundWarning(warning, 'background-removal-v2-excessive'));
                     updatesById[emote.id] = {
                         backgroundRemoval: {
                             ...analysis.backgroundRemoval,
@@ -328,11 +443,13 @@ export function useEmoteBatch() {
                         },
                         erasurePoints: [],
                         restorePoints: [],
-                        validation: mergeValidationWarnings(emote.validation, analysis.warnings),
+                        validation: replaceValidationWarnings(emote.validation, 'backgroundRemoval', backgroundWarnings),
                     };
                 } catch (error) {
                     updatesById[emote.id] = {
-                        validation: mergeValidationWarnings(emote.validation, [error.message || 'No se pudo aplicar fondo v2.']),
+                        validation: replaceValidationWarnings(emote.validation, 'backgroundRemoval', [
+                            createBackgroundWarning(error.message || 'No se pudo aplicar fondo v2.', 'background-removal-v2-error'),
+                        ]),
                     };
                 }
             }
@@ -341,6 +458,7 @@ export function useEmoteBatch() {
                 updatesById[emote.id] ? mergeEmoteUpdates(emote, updatesById[emote.id]) : emote
             )));
             clearPreviewsForIds(targetIds);
+            return true;
         } finally {
             setIsApplyingBackgroundV2(false);
         }
@@ -580,7 +698,8 @@ export function useEmoteBatch() {
         selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
         activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
         copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
-        trimSelectedEmotes, isTrimmingBatch, applyBackgroundRemovalV2, isApplyingBackgroundV2,
+        trimSelectedEmotes, isTrimmingBatch,
+        applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
         comparisonMode, setComparisonMode,
         gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
         isEyedropperActive, setIsEyedropperActive,

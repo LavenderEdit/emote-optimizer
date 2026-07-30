@@ -16,7 +16,8 @@ function App() {
     selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
     activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
     copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
-    trimSelectedEmotes, isTrimmingBatch, applyBackgroundRemovalV2, isApplyingBackgroundV2,
+    trimSelectedEmotes, isTrimmingBatch,
+    applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
     comparisonMode, setComparisonMode,
     gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
     isEyedropperActive, setIsEyedropperActive,
@@ -149,6 +150,10 @@ function App() {
           onTrimSelected={trimSelectedEmotes}
           isTrimmingBatch={isTrimmingBatch}
           onApplyBackgroundV2={applyBackgroundRemovalV2}
+          onUpdateBackgroundV2Params={updateBackgroundRemovalV2Params}
+          onResetBackgroundV2={resetBackgroundRemovalV2}
+          onRemoveBackgroundV2={removeBackgroundRemovalV2}
+          onApplyBackgroundV2Params={applyBackgroundRemovalV2Params}
           isApplyingBackgroundV2={isApplyingBackgroundV2}
         />
 
