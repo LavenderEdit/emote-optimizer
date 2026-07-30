@@ -5,6 +5,7 @@ export function useImageProcessor({
     emote,
     asset,
     onPreviewReady,
+    comparisonMode = 'after',
 }) {
     const canvasRef = useRef(null);
 
@@ -13,7 +14,9 @@ export function useImageProcessor({
 
         async function render() {
             if (!emote || !asset || !canvasRef.current) return;
-            const renderedCanvas = await renderEmoteMasterCanvas(emote, asset);
+            const renderedCanvas = await renderEmoteMasterCanvas(emote, asset, {
+                applyOperations: comparisonMode !== 'before',
+            });
             if (!renderedCanvas || cancelled || !canvasRef.current) return;
 
             const canvas = canvasRef.current;
@@ -23,7 +26,7 @@ export function useImageProcessor({
             context.clearRect(0, 0, canvas.width, canvas.height);
             context.drawImage(renderedCanvas, 0, 0);
 
-            if (onPreviewReady) {
+            if (onPreviewReady && comparisonMode !== 'before') {
                 try {
                     const blob = await canvasToBlob(canvas);
                     if (!cancelled) onPreviewReady(emote.id, blob);
@@ -40,7 +43,7 @@ export function useImageProcessor({
         return () => {
             cancelled = true;
         };
-    }, [emote, asset, onPreviewReady]);
+    }, [emote, asset, onPreviewReady, comparisonMode]);
 
     return { canvasRef };
 }

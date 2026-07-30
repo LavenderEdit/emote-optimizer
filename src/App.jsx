@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Plus, X } from 'lucide-react';
+import { CheckSquare, Plus, Square, X } from 'lucide-react';
 import Header from './components/layout/Header';
 import SidebarLeft from './components/workspace/SidebarLeft';
 import CanvasArea from './components/workspace/CanvasArea';
@@ -13,7 +13,11 @@ function App() {
     emotes,
     assets,
     activeId, setActiveId,
-    activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateActivePreview,
+    selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
+    activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
+    copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
+    trimSelectedEmotes, isTrimmingBatch,
+    comparisonMode, setComparisonMode,
     gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
     isEyedropperActive, setIsEyedropperActive,
     isExporting,
@@ -44,16 +48,14 @@ function App() {
           hasImage={!!activeEmote}
           onUploadClick={() => triggerUpload('individual')}
           onGridUploadClick={() => triggerUpload('grid')}
-          onUploadClick={() => triggerUpload('individual')}
-          onGridUploadClick={() => triggerUpload('grid')}
           isEyedropperActive={isEyedropperActive}
           onEyedropperToggle={() => setIsEyedropperActive(!isEyedropperActive)}
           tolerance={activeEmote?.tolerance || 30}
-          onToleranceChange={(val) => updateActiveEmote({ tolerance: val })}
+          onToleranceChange={(val) => updateSelectedOrActiveEmotes({ tolerance: val })}
           isAutoOutlineActive={activeEmote?.isAutoOutlineActive || false}
-          onAutoOutlineToggle={() => updateActiveEmote({ isAutoOutlineActive: !activeEmote.isAutoOutlineActive })}
+          onAutoOutlineToggle={() => updateSelectedOrActiveEmotes({ isAutoOutlineActive: !activeEmote?.isAutoOutlineActive })}
           adjustments={activeEmote?.adjustments}
-          onAdjustmentsChange={(adjustments) => updateActiveEmote({ adjustments })}
+          onAdjustmentsChange={(adjustments) => updateSelectedOrActiveEmotes({ adjustments })}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -64,8 +66,6 @@ function App() {
             onImageRemove={handleRemoveActive}
             onUploadClick={() => triggerUpload('individual')}
             onGridUploadClick={() => triggerUpload('grid')}
-            onUploadClick={() => triggerUpload('individual')}
-            onGridUploadClick={() => triggerUpload('grid')}
             onFileDrop={(file) => processFiles([file])}
             gridDraft={gridDraft}
             onGridDraftChange={updateGridDraft}
@@ -74,6 +74,7 @@ function App() {
             onGridCancel={closeGridDraft}
             isGeneratingGrid={isGeneratingGrid}
             isDetectingGrid={isDetectingGrid}
+            comparisonMode={comparisonMode}
             isEyedropperActive={isEyedropperActive}
             setErasurePoints={(updater) => updateActiveEmote({ erasurePoints: typeof updater === 'function' ? updater(activeEmote?.erasurePoints || []) : updater })}
             setRestorePoints={(updater) => updateActiveEmote({ restorePoints: typeof updater === 'function' ? updater(activeEmote?.restorePoints || []) : updater })}
@@ -93,6 +94,17 @@ function App() {
                     }`}
                 >
                   <DocumentThumbnail emote={emote} asset={assets[emote.sourceId]} />
+                  <button
+                    type="button"
+                    aria-label={`Seleccionar ${emote.name}`}
+                    onClick={(e) => { e.stopPropagation(); toggleEmoteSelection(emote.id); }}
+                    className={`absolute bottom-1 left-1 rounded p-0.5 ${selectedEmoteIds.includes(emote.id)
+                        ? (isDark ? 'bg-[#c41026] text-white' : 'bg-purple-600 text-white')
+                        : (isDark ? 'bg-black/60 text-[#deb069]' : 'bg-white/90 text-gray-700')
+                      }`}
+                  >
+                    {selectedEmoteIds.includes(emote.id) ? <CheckSquare size={12} /> : <Square size={12} />}
+                  </button>
                   {emote.id === activeId && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRemoveActive(); }}
@@ -117,10 +129,25 @@ function App() {
 
         <SidebarRight
           theme={theme}
+          activeEmote={activeEmote}
           processedImage={activePreviewUrl}
           onExport={exportToZip}
           isExporting={isExporting}
           totalItems={emotes.length}
+          selectedCount={selectedEmoteIds.length}
+          hasSettingsClipboard={!!settingsClipboard}
+          comparisonMode={comparisonMode}
+          onComparisonModeChange={setComparisonMode}
+          onSelectAll={selectAllEmotes}
+          onSelectNone={selectNoEmotes}
+          onSelectInvert={invertEmoteSelection}
+          onSelectWarnings={selectWarningEmotes}
+          onUpdateTargets={updateSelectedOrActiveEmotes}
+          onCopySettings={copyActiveSettings}
+          onPasteSettings={pasteSettingsToSelected}
+          onApplyActiveSettings={applyActiveSettingsToSelected}
+          onTrimSelected={trimSelectedEmotes}
+          isTrimmingBatch={isTrimmingBatch}
         />
 
       </div>

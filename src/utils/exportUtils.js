@@ -92,6 +92,7 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
                 outline: emote.outline || null,
                 fitMode: emote.fitMode,
                 padding: emote.padding,
+                frame: emote.frame || null,
             },
             outputs: [],
             errors: [],

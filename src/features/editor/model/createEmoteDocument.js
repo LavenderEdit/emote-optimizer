@@ -17,6 +17,11 @@ export function createEmoteDocumentFromAsset(asset) {
         cropRect: { x: 0, y: 0, width: asset.width, height: asset.height },
         fitMode: 'contain',
         padding: 0,
+        frame: {
+            zoom: 1,
+            offsetX: 0,
+            offsetY: 0,
+        },
         backgroundRemoval: {
             mode: 'manual-flood-fill',
             tolerance: 30,
@@ -49,6 +54,7 @@ export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey
     const preserved = previousDocument ? {
         fitMode: previousDocument.fitMode,
         padding: previousDocument.padding,
+        frame: previousDocument.frame,
         backgroundRemoval: previousDocument.backgroundRemoval,
         adjustments: previousDocument.adjustments,
         outline: previousDocument.outline,
@@ -78,6 +84,11 @@ export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey
         generationKey,
         fitMode: preserved.fitMode || 'contain',
         padding: preserved.padding ?? 0,
+        frame: preserved.frame || {
+            zoom: 1,
+            offsetX: 0,
+            offsetY: 0,
+        },
         backgroundRemoval: preserved.backgroundRemoval || {
             mode: 'manual-flood-fill',
             tolerance: 30,

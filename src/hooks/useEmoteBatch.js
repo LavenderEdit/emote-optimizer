@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { generateEmotesZip } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
+import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
 import { startGridDetection } from '../features/grid-import/gridDetection/runGridDetection';
@@ -44,6 +45,51 @@ function mergeEmoteUpdates(emote, updates) {
     };
 }
 
+function cloneSettings(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function createSettingsPatch(emote, parts = ['adjustments', 'background', 'fit', 'outline']) {
+    const patch = {};
+    if (!emote) return patch;
+
+    if (parts.includes('adjustments')) {
+        patch.adjustments = cloneSettings(emote.adjustments);
+    }
+
+    if (parts.includes('background')) {
+        patch.backgroundRemoval = cloneSettings(emote.backgroundRemoval);
+        patch.erasurePoints = cloneSettings(emote.erasurePoints || []);
+        patch.restorePoints = cloneSettings(emote.restorePoints || []);
+        patch.tolerance = emote.tolerance;
+    }
+
+    if (parts.includes('fit')) {
+        patch.fitMode = emote.fitMode || 'contain';
+        patch.padding = emote.padding || 0;
+        patch.frame = cloneSettings(emote.frame || { zoom: 1, offsetX: 0, offsetY: 0 });
+    }
+
+    if (parts.includes('outline')) {
+        patch.outline = cloneSettings(emote.outline);
+        patch.isAutoOutlineActive = Boolean(emote.isAutoOutlineActive || emote.outline?.enabled);
+    }
+
+    return patch;
+}
+
+function mergeValidationWarnings(validation, warnings) {
+    const nextWarnings = Array.from(new Set([...(validation?.warnings || []), ...warnings]));
+    return {
+        errors: validation?.errors || [],
+        warnings: nextWarnings,
+    };
+}
+
+function hasWarnings(emote) {
+    return (emote.validation?.warnings?.length || 0) > 0 || (emote.validation?.errors?.length || 0) > 0;
+}
+
 async function createValidatedAsset(file) {
     const fileValidation = validateImageFile(file);
     if (!fileValidation.valid) {
@@ -74,12 +120,16 @@ export function useEmoteBatch() {
     const [assets, setAssets] = useState({});
     const [previewUrls, setPreviewUrls] = useState({});
     const [activeId, setActiveId] = useState(null);
+    const [selectedEmoteIds, setSelectedEmoteIds] = useState([]);
+    const [settingsClipboard, setSettingsClipboard] = useState(null);
+    const [comparisonMode, setComparisonMode] = useState('after');
     const [gridDraft, setGridDraft] = useState(null);
 
     const [isEyedropperActive, setIsEyedropperActive] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [isGeneratingGrid, setIsGeneratingGrid] = useState(false);
     const [isDetectingGrid, setIsDetectingGrid] = useState(false);
+    const [isTrimmingBatch, setIsTrimmingBatch] = useState(false);
 
     const activeEmote = emotes.find(e => e.id === activeId);
     const activeAsset = activeEmote ? assets[activeEmote.sourceId] : null;
@@ -101,10 +151,138 @@ export function useEmoteBatch() {
         });
     }, []);
 
+    useEffect(() => {
+        setSelectedEmoteIds((current) => {
+            const validIds = new Set(emotes.map((emote) => emote.id));
+            const next = current.filter((id) => validIds.has(id));
+            return next.length === current.length ? current : next;
+        });
+    }, [emotes]);
+
+    const getTargetEmoteIds = useCallback(() => {
+        return selectedEmoteIds.length > 0
+            ? selectedEmoteIds
+            : activeId ? [activeId] : [];
+    }, [activeId, selectedEmoteIds]);
+
+    const clearPreviewsForIds = useCallback((ids) => {
+        if (ids.length === 0) return;
+        const idSet = new Set(ids);
+        setPreviewUrls((current) => {
+            const next = { ...current };
+            ids.forEach((id) => {
+                revokePreview(next[id]);
+                delete next[id];
+            });
+            previewUrlsRef.current = next;
+            return Object.keys(current).some((id) => idSet.has(id)) ? next : current;
+        });
+    }, []);
+
     const updateActiveEmote = useCallback((updates) => {
         if (!activeId) return;
         setEmotes(prev => prev.map(e => e.id === activeId ? mergeEmoteUpdates(e, updates) : e));
-    }, [activeId]);
+        clearPreviewsForIds([activeId]);
+    }, [activeId, clearPreviewsForIds]);
+
+    const updateSelectedOrActiveEmotes = useCallback((updates) => {
+        const targetIds = getTargetEmoteIds();
+        if (targetIds.length === 0) return;
+        const targetSet = new Set(targetIds);
+        setEmotes((current) => current.map((emote) => (
+            targetSet.has(emote.id)
+                ? mergeEmoteUpdates(emote, typeof updates === 'function' ? updates(emote) : updates)
+                : emote
+        )));
+        clearPreviewsForIds(targetIds);
+    }, [clearPreviewsForIds, getTargetEmoteIds]);
+
+    const toggleEmoteSelection = useCallback((id) => {
+        setSelectedEmoteIds((current) => current.includes(id)
+            ? current.filter((item) => item !== id)
+            : [...current, id]);
+    }, []);
+
+    const selectAllEmotes = useCallback(() => {
+        setSelectedEmoteIds(emotesRef.current.map((emote) => emote.id));
+    }, []);
+
+    const selectNoEmotes = useCallback(() => {
+        setSelectedEmoteIds([]);
+    }, []);
+
+    const invertEmoteSelection = useCallback(() => {
+        setSelectedEmoteIds((current) => {
+            const selected = new Set(current);
+            return emotesRef.current
+                .map((emote) => emote.id)
+                .filter((id) => !selected.has(id));
+        });
+    }, []);
+
+    const selectWarningEmotes = useCallback(() => {
+        setSelectedEmoteIds(emotesRef.current.filter(hasWarnings).map((emote) => emote.id));
+    }, []);
+
+    const copyActiveSettings = useCallback(() => {
+        if (!activeEmote) return;
+        setSettingsClipboard(createSettingsPatch(activeEmote));
+    }, [activeEmote]);
+
+    const pasteSettingsToSelected = useCallback(() => {
+        if (!settingsClipboard) return;
+        updateSelectedOrActiveEmotes(cloneSettings(settingsClipboard));
+    }, [settingsClipboard, updateSelectedOrActiveEmotes]);
+
+    const applyActiveSettingsToSelected = useCallback((parts) => {
+        if (!activeEmote || selectedEmoteIds.length === 0) return;
+        const patch = createSettingsPatch(activeEmote, parts);
+        const targetSet = new Set(selectedEmoteIds);
+        setEmotes((current) => current.map((emote) => (
+            targetSet.has(emote.id) ? mergeEmoteUpdates(emote, cloneSettings(patch)) : emote
+        )));
+        clearPreviewsForIds(selectedEmoteIds);
+    }, [activeEmote, clearPreviewsForIds, selectedEmoteIds]);
+
+    const trimSelectedEmotes = useCallback(async () => {
+        const targetIds = getTargetEmoteIds();
+        if (targetIds.length === 0) return;
+        const targetSet = new Set(targetIds);
+        setIsTrimmingBatch(true);
+        try {
+            const updatesById = {};
+            const targets = emotesRef.current.filter((emote) => targetSet.has(emote.id));
+            for (const emote of targets) {
+                const asset = assetsRef.current[emote.sourceId];
+                if (!asset) {
+                    updatesById[emote.id] = {
+                        validation: mergeValidationWarnings(emote.validation, ['No se encontro el asset fuente para trim.']),
+                    };
+                    continue;
+                }
+
+                try {
+                    const trim = await trimEmoteToContent(emote, asset);
+                    updatesById[emote.id] = {
+                        cropRect: trim.cropRect,
+                        trim: trim.diagnostics,
+                        validation: mergeValidationWarnings(emote.validation, trim.warnings),
+                    };
+                } catch (error) {
+                    updatesById[emote.id] = {
+                        validation: mergeValidationWarnings(emote.validation, [error.message || 'No se pudo aplicar trim automatico.']),
+                    };
+                }
+            }
+
+            setEmotes((current) => current.map((emote) => (
+                updatesById[emote.id] ? mergeEmoteUpdates(emote, updatesById[emote.id]) : emote
+            )));
+            clearPreviewsForIds(targetIds);
+        } finally {
+            setIsTrimmingBatch(false);
+        }
+    }, [clearPreviewsForIds, getTargetEmoteIds]);
 
     const updateActivePreview = useCallback((emoteId, blob) => {
         const nextUrl = URL.createObjectURL(blob);
@@ -204,6 +382,7 @@ export function useEmoteBatch() {
         setPreviewUrls((currentUrls) => {
             return releasePreviewForEmote(currentUrls, current?.id);
         });
+        setSelectedEmoteIds((currentSelection) => currentSelection.filter((id) => id !== current?.id));
         setActiveId(next[0]?.id || null);
         setIsEyedropperActive(false);
     };
@@ -249,8 +428,10 @@ export function useEmoteBatch() {
             });
             if (documents.length > 0) {
                 setActiveId(documents[0].id);
+                setSelectedEmoteIds(documents.map((document) => document.id));
             } else if (activeId && !nextEmotes.some((emote) => emote.id === activeId)) {
                 setActiveId(nextEmotes[0]?.id || null);
+                setSelectedEmoteIds([]);
             }
         } catch (error) {
             console.error('Error al generar recortes:', error);
@@ -334,7 +515,11 @@ export function useEmoteBatch() {
         emotes,
         assets,
         activeId, setActiveId,
-        activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateActivePreview,
+        selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
+        activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
+        copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
+        trimSelectedEmotes, isTrimmingBatch,
+        comparisonMode, setComparisonMode,
         gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
         isEyedropperActive, setIsEyedropperActive,
         isExporting,

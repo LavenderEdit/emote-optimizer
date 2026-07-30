@@ -25,14 +25,23 @@ const detectionMock = vi.hoisted(() => ({
     }),
 }));
 
+const trimMock = vi.hoisted(() => ({
+    trimEmoteToContent: vi.fn(),
+}));
+
 vi.mock('../features/grid-import/gridDetection/runGridDetection', () => ({
     startGridDetection: detectionMock.startGridDetection,
+}));
+
+vi.mock('../features/editor/imagePipeline/trimContent', () => ({
+    trimEmoteToContent: trimMock.trimEmoteToContent,
 }));
 
 describe('useEmoteBatch', () => {
     beforeEach(() => {
         detectionMock.requests.length = 0;
         detectionMock.startGridDetection.mockClear();
+        trimMock.trimEmoteToContent.mockReset();
         vi.stubGlobal('alert', vi.fn());
         vi.stubGlobal('Image', class {
             set src(value) {
@@ -147,5 +156,95 @@ describe('useEmoteBatch', () => {
         expect(result.current.gridDraft.source.fileName).toBe('second.png');
         expect(result.current.gridDraft.rows).toBe(5);
         expect(result.current.gridDraft.columns).toBe(5);
+    });
+
+    it('applies padding, fit and frame changes to all selected generated emotes', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.selectAllEmotes();
+        });
+        await act(async () => {
+            result.current.updateSelectedOrActiveEmotes({
+                fitMode: 'manual',
+                padding: 12,
+                frame: { zoom: 1.4, offsetX: 6, offsetY: -3 },
+            });
+        });
+
+        expect(result.current.selectedEmoteIds).toHaveLength(25);
+        expect(result.current.emotes.every((emote) => emote.fitMode === 'manual')).toBe(true);
+        expect(result.current.emotes.every((emote) => emote.padding === 12)).toBe(true);
+        expect(result.current.emotes.every((emote) => emote.frame.zoom === 1.4)).toBe(true);
+    });
+
+    it('copies active settings and pastes them to the selected emotes', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.selectNoEmotes();
+            result.current.updateActiveEmote({
+                fitMode: 'cover',
+                padding: 8,
+                adjustments: { brightness: 9, contrast: 4, saturation: 3, sharpen: 2 },
+            });
+        });
+        await act(async () => {
+            result.current.copyActiveSettings();
+        });
+        await act(async () => {
+            result.current.toggleEmoteSelection(result.current.emotes[1].id);
+        });
+        await act(async () => {
+            result.current.pasteSettingsToSelected();
+        });
+
+        expect(result.current.emotes[1].fitMode).toBe('cover');
+        expect(result.current.emotes[1].padding).toBe(8);
+        expect(result.current.emotes[1].adjustments.brightness).toBe(9);
+    });
+
+    it('trims selected emotes and stores crop warnings', async () => {
+        trimMock.trimEmoteToContent.mockResolvedValue({
+            cropRect: { x: 4, y: 5, width: 40, height: 42 },
+            warnings: ['Contenido tocando el borde izquierdo del crop.'],
+            diagnostics: { visiblePixels: 120, backgroundColor: [255, 255, 255, 255] },
+        });
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.selectNoEmotes();
+            result.current.toggleEmoteSelection(result.current.emotes[0].id);
+            result.current.toggleEmoteSelection(result.current.emotes[1].id);
+        });
+        await act(async () => {
+            await result.current.trimSelectedEmotes();
+        });
+
+        expect(trimMock.trimEmoteToContent).toHaveBeenCalledTimes(2);
+        expect(result.current.emotes[0].cropRect).toEqual({ x: 4, y: 5, width: 40, height: 42 });
+        expect(result.current.emotes[1].validation.warnings).toContain('Contenido tocando el borde izquierdo del crop.');
+        expect(result.current.emotes[2].cropRect).not.toEqual({ x: 4, y: 5, width: 40, height: 42 });
     });
 });

@@ -22,6 +22,7 @@ export default function CanvasArea({
     onGridCancel,
     isGeneratingGrid,
     isDetectingGrid,
+    comparisonMode,
     isEyedropperActive,
     setErasurePoints,
     setRestorePoints,
@@ -35,6 +36,7 @@ export default function CanvasArea({
         emote,
         asset,
         onPreviewReady,
+        comparisonMode,
     });
 
     const { isDragging, dragHandlers } = useDragAndDrop(onFileDrop);

@@ -2,7 +2,7 @@ import { applyAutoOutline } from '../../../utils/imageProcessing/autoOutline';
 import { applyProAdjustments } from '../../../utils/imageProcessing/adjustments';
 import { applyFloodFillErasure } from '../../../utils/imageProcessing/floodFill';
 import { applyRestoreBrush } from '../../../utils/imageProcessing/restoreBrush';
-import { createContainSquarePlacement } from '../../../shared/math/rect';
+import { clamp } from '../../../shared/math/rect';
 
 export function loadImageElement(src) {
     return new Promise((resolve, reject) => {
@@ -13,7 +13,7 @@ export function loadImageElement(src) {
     });
 }
 
-export async function renderEmoteMasterCanvas(emote, asset) {
+export async function renderEmoteMasterCanvas(emote, asset, options = {}) {
     if (!emote || !asset) return null;
 
     const image = await loadImageElement(asset.objectUrl);
@@ -38,7 +38,9 @@ export async function renderEmoteMasterCanvas(emote, asset) {
         canvas.height,
     );
 
-    applyDocumentOperations(canvas, emote);
+    if (options.applyOperations !== false) {
+        applyDocumentOperations(canvas, emote);
+    }
     return canvas;
 }
 
@@ -54,11 +56,11 @@ export async function renderEmoteOutputCanvas(emote, asset, targetSize) {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
 
-    const placement = createContainSquarePlacement(
+    const placement = createOutputPlacement(
         masterCanvas.width,
         masterCanvas.height,
         targetSize,
-        emote.padding || 0,
+        emote,
     );
 
     context.drawImage(
@@ -74,6 +76,30 @@ export async function renderEmoteOutputCanvas(emote, asset, targetSize) {
     );
 
     return finalCanvas;
+}
+
+export function createOutputPlacement(sourceWidth, sourceHeight, targetSize, emote = {}) {
+    const safePadding = clamp(emote.padding || 0, 0, Math.floor(targetSize / 2) - 1);
+    const drawableSize = targetSize - safePadding * 2;
+    const fitMode = emote.fitMode || 'contain';
+    const baseScale = fitMode === 'cover'
+        ? Math.max(drawableSize / sourceWidth, drawableSize / sourceHeight)
+        : Math.min(drawableSize / sourceWidth, drawableSize / sourceHeight);
+    const frame = emote.frame || {};
+    const manualZoom = fitMode === 'manual' ? clamp(frame.zoom ?? emote.zoom ?? 1, 0.1, 8) : 1;
+    const scale = baseScale * manualZoom;
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const offsetX = fitMode === 'manual' ? Math.round(frame.offsetX ?? emote.offsetX ?? 0) : 0;
+    const offsetY = fitMode === 'manual' ? Math.round(frame.offsetY ?? emote.offsetY ?? 0) : 0;
+
+    return {
+        x: Math.round((targetSize - width) / 2 + offsetX),
+        y: Math.round((targetSize - height) / 2 + offsetY),
+        width,
+        height,
+        scale,
+    };
 }
 
 export function applyDocumentOperations(canvas, emote) {
