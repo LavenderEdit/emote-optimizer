@@ -86,6 +86,7 @@ export default function GridImportWorkspace({
                                 type="button"
                                 onClick={onAutoDetect}
                                 disabled={isDetecting}
+                                data-testid="auto-detect-grid"
                                 className={secondaryButtonClass(isDark)}
                                 title="Detectar automaticamente filas, columnas y celdas vacias"
                             >
@@ -169,7 +170,7 @@ export default function GridImportWorkspace({
                         <button type="button" className={secondaryButtonClass(isDark)} onClick={markLastCellEmpty}>
                             Ultima vacia
                         </button>
-                        <div className={`rounded border px-3 py-2 text-center text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}>
+                        <div data-testid="grid-active-count" className={`rounded border px-3 py-2 text-center text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}>
                             {activeCount} activos / {pendingCount} pendientes
                         </div>
                     </div>
@@ -179,6 +180,7 @@ export default function GridImportWorkspace({
                             type="button"
                             onClick={onGenerate}
                             disabled={pendingCount === 0 || isGenerating}
+                            data-testid="generate-grid-emotes"
                             className={`flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-colors ${pendingCount > 0 && !isGenerating
                                 ? isDark
                                     ? 'bg-[#c41026] text-white hover:bg-[#a00d1e]'

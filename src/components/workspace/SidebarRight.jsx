@@ -62,6 +62,10 @@ export default function SidebarRight({
         excessiveRemovalThreshold: activeEmote?.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
     };
     const canDownloadPrepared = exportState?.downloadUrl && (exportState.status === 'valid' || exportState.status === 'invalid');
+    const isManualExportPreset = (exportOptions?.presetId || 'twitch-static-manual') === 'twitch-static-manual';
+    const exportProgressLabel = exportState?.status === 'compressing'
+        ? 'Finalizando ZIP'
+        : `Progreso: ${exportState?.progress?.processedFiles || 0}/${exportState?.progress?.totalFiles || 0} archivos`;
 
     return (
         <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
@@ -135,7 +139,7 @@ export default function SidebarRight({
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('targets', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
                             Seleccion
                         </button>
-                        <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('all', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
+                        <button type="button" data-testid="background-v2-all" className={buttonClass} onClick={() => onApplyBackgroundV2('all', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
                             Todos
                         </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2(selectedCount > 0 ? 'targets' : 'active', 'global')} disabled={!activeEmote || isApplyingBackgroundV2}>
@@ -278,6 +282,24 @@ export default function SidebarRight({
                             <option value="twitch-static-auto">Twitch auto-resize maestro</option>
                         </select>
                     </label>
+                    {isManualExportPreset && (
+                        <div>
+                            <span className={`mb-1 block text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>PNG activo</span>
+                            <div className="grid grid-cols-3 gap-1">
+                                {[112, 56, 28].map((size) => (
+                                    <button
+                                        key={size}
+                                        type="button"
+                                        data-testid={`active-png-size-${size}`}
+                                        className={(exportOptions?.activeOutputSize || 112) === size ? activeButtonClass : buttonClass}
+                                        onClick={() => onExportOptionsChange({ activeOutputSize: size })}
+                                    >
+                                        {size}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <label className="block">
                         <span className={`mb-1 block text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>Alcance</span>
                         <select
@@ -295,20 +317,26 @@ export default function SidebarRight({
                             ? isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'
                             : isDark ? 'border-green-500/30 bg-green-500/10 text-green-100' : 'border-green-300 bg-green-50 text-green-800'
                             }`}
+                            data-testid="export-summary"
                         >
                             Estado: {exportState.status}. Validos: {exportState.summary.validOutputs}/{exportState.summary.totalOutputs}. Invalidos: {exportState.summary.invalidOutputs}.
                         </div>
                     )}
+                    {exportState?.error && (
+                        <div data-testid="export-error" className={`rounded border px-2 py-2 text-xs ${isDark ? 'border-red-500/30 bg-red-500/10 text-red-100' : 'border-red-300 bg-red-50 text-red-800'}`}>
+                            {exportState.error}
+                        </div>
+                    )}
                     {exportState?.progress && (
-                        <div className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
-                            Progreso: {exportState.progress.processedFiles}/{exportState.progress.totalFiles || 0} archivos
+                        <div data-testid="export-progress" className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
+                            {exportProgressLabel}
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-1">
                         <button type="button" className={buttonClass} onClick={onDownloadActivePng} disabled={!activeEmote}>PNG activo</button>
                         <button type="button" className={buttonClass} onClick={onRetryExport} disabled={isExporting || totalItems === 0}>Reintentar</button>
                         <button type="button" className={buttonClass} onClick={onCancelExport} disabled={!isExporting}>Cancelar</button>
-                        <button type="button" className={buttonClass} onClick={onDownloadPreparedExport} disabled={!canDownloadPrepared}>Descargar ZIP</button>
+                        <button type="button" data-testid="download-prepared-export" className={buttonClass} onClick={onDownloadPreparedExport} disabled={!canDownloadPrepared}>Descargar ZIP</button>
                     </div>
                 </div>
 
@@ -318,6 +346,7 @@ export default function SidebarRight({
             <div className={`p-4 border-t ${isDark ? 'border-[#7f6000]' : 'border-gray-300'}`}>
                 <button
                     onClick={() => (onPrepareExport || onExport)?.()}
+                    data-testid="prepare-export"
                     disabled={totalItems === 0 || isExporting}
                     className={`w-full py-3 rounded flex items-center justify-center gap-2 font-semibold transition-all ${totalItems > 0 && !isExporting
                         ? (isDark
@@ -329,7 +358,7 @@ export default function SidebarRight({
                         }`}
                 >
                     {isExporting ? (
-                        <><Loader2 size={20} className="animate-spin" /> Empaquetando ZIP...</>
+                        <><Loader2 size={20} className="animate-spin" /> {exportState?.status === 'compressing' ? 'Finalizando ZIP' : 'Empaquetando ZIP...'}</>
                     ) : (
                         <><Download size={20} /> Exportar {totalItems > 0 ? totalItems : ''} Emotes</>
                     )}

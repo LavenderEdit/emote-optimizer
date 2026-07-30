@@ -110,6 +110,27 @@ describe('buildEmotesZip', () => {
         expect(report.items[0].valid).toBe(false);
     });
 
+    it('routes opaque PNG outputs to invalid when transparency is required', async () => {
+        const { emotes, assets } = createExportFixture(1);
+        const { manifest } = await buildEmotesZip(emotes, assets, {
+            renderOutput: async (_emote, _asset, outputRule) => ({
+                base64: 'AA==',
+                bytes: 10,
+                width: outputRule.width,
+                height: outputRule.height,
+                mime: 'image/png',
+                hasTransparency: false,
+                transparentPixelRatio: 0,
+                visiblePixelRatio: 0.5,
+                pngSignatureValid: true,
+            }),
+        });
+
+        expect(manifest.summary.validOutputs).toBe(0);
+        expect(manifest.items[0].outputs.every((output) => output.path.startsWith('invalid/'))).toBe(true);
+        expect(manifest.items[0].outputs[0].errors).toContain('La salida debe conservar transparencia real.');
+    });
+
     it('keeps duplicate normalized names unique without invalidating valid files', async () => {
         const { emotes, assets } = createExportFixture(2);
         const renamed = emotes.map((emote) => ({ ...emote, name: 'same name' }));
@@ -158,6 +179,7 @@ async function validRenderOutput(_emote, _asset, outputRule) {
         hasTransparency: true,
         transparentPixelRatio: 0.5,
         visiblePixelRatio: 0.5,
+        pngSignatureValid: true,
     };
 }
 

@@ -33,6 +33,20 @@ const backgroundV2Mock = vi.hoisted(() => ({
     analyzeEmoteBackgroundRemovalV2: vi.fn(),
 }));
 
+const exportUtilsMock = vi.hoisted(() => ({
+    buildEmotesZip: vi.fn(),
+    createValidatedEmoteOutput: vi.fn(),
+}));
+
+vi.mock('../utils/exportUtils', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        buildEmotesZip: exportUtilsMock.buildEmotesZip,
+        createValidatedEmoteOutput: exportUtilsMock.createValidatedEmoteOutput,
+    };
+});
+
 vi.mock('../features/grid-import/gridDetection/runGridDetection', () => ({
     startGridDetection: detectionMock.startGridDetection,
 }));
@@ -56,10 +70,15 @@ vi.mock('../features/editor/imagePipeline/backgroundRemovalV2', () => ({
 
 describe('useEmoteBatch', () => {
     beforeEach(() => {
+        vi.restoreAllMocks();
         detectionMock.requests.length = 0;
         detectionMock.startGridDetection.mockClear();
         trimMock.trimEmoteToContent.mockReset();
         backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockReset();
+        exportUtilsMock.buildEmotesZip.mockReset();
+        exportUtilsMock.createValidatedEmoteOutput.mockReset();
+        exportUtilsMock.buildEmotesZip.mockResolvedValue(createExportResult());
+        exportUtilsMock.createValidatedEmoteOutput.mockResolvedValue(createValidSingleOutput());
         vi.stubGlobal('alert', vi.fn());
         vi.stubGlobal('confirm', vi.fn(() => true));
         vi.stubGlobal('Image', class {
@@ -468,4 +487,236 @@ describe('useEmoteBatch', () => {
         expect(accepted).toBe(true);
         expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledTimes(1);
     });
+
+    it('shows compressing while finalizing the ZIP', async () => {
+        const compression = createDeferred();
+        exportUtilsMock.buildEmotesZip.mockResolvedValue(createExportResult({
+            zip: { generateAsync: vi.fn(() => compression.promise) },
+        }));
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        let exportPromise;
+        await act(async () => {
+            exportPromise = result.current.prepareExport();
+            await Promise.resolve();
+        });
+
+        expect(result.current.exportState.status).toBe('compressing');
+        expect(result.current.exportState.progress.currentFile).toBe('Finalizando ZIP');
+
+        await act(async () => {
+            compression.resolve(new Blob(['zip'], { type: 'application/zip' }));
+            await exportPromise;
+        });
+
+        expect(result.current.exportState.status).toBe('valid');
+    });
+
+    it('cancels an active export without allowing the completed response to mark it valid', async () => {
+        const compression = createDeferred();
+        exportUtilsMock.buildEmotesZip.mockResolvedValue(createExportResult({
+            zip: { generateAsync: vi.fn(() => compression.promise) },
+        }));
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        let exportPromise;
+        await act(async () => {
+            exportPromise = result.current.prepareExport();
+            await Promise.resolve();
+        });
+        await act(async () => {
+            result.current.cancelExport();
+        });
+        await act(async () => {
+            compression.resolve(new Blob(['zip'], { type: 'application/zip' }));
+            await exportPromise;
+        });
+
+        expect(result.current.exportState.status).toBe('canceled');
+    });
+
+    it('does not cancel an export that already finished', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        await act(async () => {
+            await result.current.prepareExport();
+        });
+        expect(result.current.exportState.status).toBe('valid');
+
+        await act(async () => {
+            result.current.cancelExport();
+        });
+
+        expect(result.current.exportState.status).toBe('valid');
+    });
+
+    it('discards stale export responses after a newer export starts', async () => {
+        const firstExport = createDeferred();
+        const secondExport = createExportResult();
+        exportUtilsMock.buildEmotesZip
+            .mockImplementationOnce(() => firstExport.promise)
+            .mockResolvedValueOnce(secondExport);
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        let firstPromise;
+        let secondPromise;
+        await act(async () => {
+            firstPromise = result.current.prepareExport();
+            secondPromise = result.current.prepareExport();
+            await secondPromise;
+        });
+        expect(result.current.exportState.status).toBe('valid');
+
+        await act(async () => {
+            firstExport.resolve(createExportResult({ status: 'invalid' }));
+            await firstPromise;
+        });
+
+        expect(result.current.exportState.status).toBe('valid');
+        expect(result.current.exportState.summary.validOutputs).toBe(3);
+    });
+
+    it('downloads the active manual PNG at the selected Twitch size', async () => {
+        const { click, anchor } = mockAnchorDownload();
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        await act(async () => {
+            result.current.updateExportOptions({ activeOutputSize: 56 });
+        });
+        await act(async () => {
+            await result.current.downloadActivePng();
+        });
+
+        expect(exportUtilsMock.createValidatedEmoteOutput).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.any(Object),
+            expect.objectContaining({ id: 'twitch-static-manual' }),
+            expect.objectContaining({ width: 56 }),
+            expect.any(String),
+        );
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(anchor.download).toMatch(/_56\.png$/);
+    });
+
+    it('downloads the active auto-resize PNG as a master output', async () => {
+        const { click, anchor } = mockAnchorDownload();
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        await act(async () => {
+            result.current.updateExportOptions({ presetId: 'twitch-static-auto' });
+        });
+        await act(async () => {
+            await result.current.downloadActivePng();
+        });
+
+        expect(exportUtilsMock.createValidatedEmoteOutput).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.any(Object),
+            expect.objectContaining({ id: 'twitch-static-auto' }),
+            expect.objectContaining({ suffix: 'master' }),
+            expect.any(String),
+        );
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(anchor.download).toMatch(/_master\.png$/);
+    });
+
+    it('does not download the active PNG when validation fails', async () => {
+        const { click } = mockAnchorDownload();
+        exportUtilsMock.createValidatedEmoteOutput.mockResolvedValueOnce({
+            encoded: { bytes: 10, base64: 'AA==' },
+            validation: {
+                valid: false,
+                errors: ['La salida debe conservar transparencia real.'],
+                warnings: [],
+            },
+        });
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        await act(async () => {
+            await result.current.downloadActivePng();
+        });
+
+        expect(click).not.toHaveBeenCalled();
+        expect(result.current.exportState.status).toBe('invalid');
+        expect(result.current.exportState.error).toBe('La salida debe conservar transparencia real.');
+    });
 });
+
+async function createGridDocuments(result) {
+    const file = new File(['image'], 'grid.png', { type: 'image/png' });
+    await act(async () => {
+        await result.current.processFiles([file], 'grid');
+    });
+    await act(async () => {
+        await result.current.generateGridEmotes();
+    });
+}
+
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((promiseResolve, promiseReject) => {
+        resolve = promiseResolve;
+        reject = promiseReject;
+    });
+    return { promise, resolve, reject };
+}
+
+function createExportResult(overrides = {}) {
+    const status = overrides.status || 'valid';
+    const summary = status === 'valid'
+        ? { totalItems: 1, validItems: 1, invalidItems: 0, totalOutputs: 3, validOutputs: 3, invalidOutputs: 0, totalBytes: 30 }
+        : { totalItems: 1, validItems: 0, invalidItems: 1, totalOutputs: 3, validOutputs: 0, invalidOutputs: 3, totalBytes: 30 };
+    return {
+        zip: { generateAsync: vi.fn(() => Promise.resolve(new Blob(['zip'], { type: 'application/zip' }))) },
+        manifest: { summary, items: [] },
+        report: { status, summary, items: [] },
+        ...overrides,
+    };
+}
+
+function createValidSingleOutput() {
+    return {
+        encoded: {
+            blob: new Blob(['png'], { type: 'image/png' }),
+            base64: 'AA==',
+            bytes: 3,
+            width: 112,
+            height: 112,
+            mime: 'image/png',
+            hasTransparency: true,
+            transparentPixelRatio: 0.5,
+            visiblePixelRatio: 0.5,
+            pngSignatureValid: true,
+        },
+        validation: {
+            valid: true,
+            errors: [],
+            warnings: [],
+        },
+    };
+}
+
+function mockAnchorDownload() {
+    const click = vi.fn();
+    const anchor = {};
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+        if (tagName !== 'a') return originalCreateElement(tagName);
+        return {
+            click,
+            set href(value) { anchor.href = value; },
+            get href() { return anchor.href; },
+            set download(value) { anchor.download = value; },
+            get download() { return anchor.download; },
+        };
+    });
+    return { click, anchor };
+}

@@ -19,3 +19,15 @@
 - Added automatic grid detection in a Web Worker. The detector estimates the border background, builds projection profiles, detects foreground/card runs and gutters, scores regularity, then classifies cells with local edge-background sampling plus `scoreEmptyCell`.
 - Automatic detection results load into the existing manual editor with confidence and warnings. Low confidence is a correction-required state, not a silent export path.
 - Added integration coverage for the grid workspace, document extraction, `useEmoteBatch`, export package creation and the synthetic 994 x 1001 reference-style grid.
+
+## 2026-07-30 - Grid Pack Studio v1.0 beta release candidate
+
+- Hardened Twitch validation so transparent-background presets reject fully opaque PNGs and empty visible outputs.
+- Centralized export encoding so ZIP export and active PNG downloads share the same Canvas render, PNG byte inspection and preset validation path.
+- Added active PNG output selection for Twitch manual sizes and auto-resize master output generation.
+- Export state now uses run ids to discard stale responses and exposes `pending`, `processing`, `compressing`, `valid`, `invalid` and `canceled`.
+- The UI shows `Finalizando ZIP` while JSZip compresses the package and keeps completed exports from being overwritten by late cancellation.
+- Added Playwright E2E tests for the real 994 x 1001 reference grid: automatic detection, 24 generated emotes, Connected background removal, Twitch manual export with 72 PNGs and auto-resize export with 24 masters.
+- Added a browser Canvas encoder E2E test that imports the real export module through Vite and validates generated PNG bytes from the ZIP.
+- Added Cloudflare Pages static deployment config with `dist` output and SPA fallback.
+- Updated release docs, changelog and package version to `1.0.0-beta.1`.

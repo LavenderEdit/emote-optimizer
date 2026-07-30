@@ -5,7 +5,11 @@ import { Buffer } from 'node:buffer';
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 export function readPngImageData(path) {
-    const file = readFileSync(path);
+    return readPngImageDataFromBuffer(readFileSync(path));
+}
+
+export function readPngImageDataFromBuffer(input) {
+    const file = Buffer.isBuffer(input) ? input : Buffer.from(input);
     PNG_SIGNATURE.forEach((byte, index) => {
         if (file[index] !== byte) throw new Error('Fixture PNG invalido.');
     });
@@ -71,6 +75,11 @@ export function readPngImageData(path) {
     }
 
     return { data: rgba, width, height };
+}
+
+export function hasPngSignature(input) {
+    const file = Buffer.isBuffer(input) ? input : Buffer.from(input);
+    return PNG_SIGNATURE.every((byte, index) => file[index] === byte);
 }
 
 function getChannels(colorType) {

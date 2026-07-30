@@ -9,6 +9,8 @@ const PRESETS = {
     [twitchStaticAuto.id]: twitchStaticAuto,
 };
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
 function blobToBase64(blob) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -18,7 +20,15 @@ function blobToBase64(blob) {
     });
 }
 
-function inspectCanvas(canvas) {
+async function blobToUint8Array(blob) {
+    return new Uint8Array(await blob.arrayBuffer());
+}
+
+function hasPngSignature(bytes) {
+    return PNG_SIGNATURE.every((byte, index) => bytes[index] === byte);
+}
+
+export function inspectCanvasAlpha(canvas) {
     const context = canvas.getContext('2d', { willReadFrequently: true });
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     let transparentPixels = 0;
@@ -38,7 +48,7 @@ function inspectCanvas(canvas) {
     };
 }
 
-async function defaultRenderOutput(emote, asset, outputRule) {
+export async function encodeEmoteOutput(emote, asset, outputRule) {
     let size = outputRule.width;
     let canvas = await renderEmoteOutputCanvas(emote, asset, size);
     if (!canvas) throw new Error('No se pudo renderizar la salida.');
@@ -58,21 +68,43 @@ async function defaultRenderOutput(emote, asset, outputRule) {
     }
 
     const base64 = await blobToBase64(blob);
+    const bytes = await blobToUint8Array(blob);
     return {
+        blob,
         base64,
         bytes: blob.size,
         width: canvas.width,
         height: canvas.height,
         mime: blob.type || 'image/png',
-        ...inspectCanvas(canvas),
+        pngSignatureValid: hasPngSignature(bytes),
+        ...inspectCanvasAlpha(canvas),
     };
+}
+
+export async function createValidatedEmoteOutput(emote, asset, preset, outputRule, name, options = {}) {
+    const renderOutput = options.renderOutput || encodeEmoteOutput;
+    const encoded = await renderOutput(emote, asset, outputRule);
+    const validation = validateTwitchOutput({
+        name,
+        mime: encoded.mime,
+        extension: 'png',
+        width: encoded.width,
+        height: encoded.height,
+        bytes: encoded.bytes,
+        hasTransparency: encoded.hasTransparency,
+        transparentPixelRatio: encoded.transparentPixelRatio,
+        visiblePixelRatio: encoded.visiblePixelRatio,
+        pngSignatureValid: encoded.pngSignatureValid,
+    }, preset, outputRule);
+
+    return { encoded, validation };
 }
 
 export async function buildEmotesZip(emotes, assets, options = {}) {
     const preset = resolvePreset(options.presetId || options.preset?.id || twitchStaticManual.id);
     const zip = new JSZip();
     const usedNames = new Set();
-    const renderOutput = options.renderOutput || defaultRenderOutput;
+    const renderOutput = options.renderOutput;
     const now = options.now || (() => new Date().toISOString());
     const signal = options.signal;
     const packageRoot = preset.id === twitchStaticAuto.id ? 'twitch-auto-resize' : 'twitch-manual';
@@ -141,17 +173,7 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
                     totalFiles,
                 });
 
-                const encoded = await renderOutput(emote, asset, outputRule);
-                const validation = validateTwitchOutput({
-                    name: safeName,
-                    mime: encoded.mime,
-                    extension: 'png',
-                    width: encoded.width,
-                    height: encoded.height,
-                    bytes: encoded.bytes,
-                    hasTransparency: encoded.hasTransparency,
-                    visiblePixelRatio: encoded.visiblePixelRatio,
-                }, preset, outputRule);
+                const { encoded, validation } = await createValidatedEmoteOutput(emote, asset, preset, outputRule, safeName, { renderOutput });
                 const valid = validation.valid;
                 const path = valid ? mainPath : invalidPath;
                 zip.file(path, encoded.base64, { base64: true });

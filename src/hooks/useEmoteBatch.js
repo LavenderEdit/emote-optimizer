@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { buildEmotesZip } from '../utils/exportUtils';
+import { buildEmotesZip, createValidatedEmoteOutput, getOutputRules, getPresetById } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
-import { canvasToBlob, renderEmoteOutputCanvas } from '../features/editor/imagePipeline/renderEmote';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
 import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
@@ -14,6 +13,8 @@ import {
     validateImageFile,
 } from '../shared/files/imageValidation';
 import { sanitizeName } from '../shared/files/names';
+
+const ACTIVE_EXPORT_STATUSES = new Set(['pending', 'processing', 'compressing']);
 
 function formatValidationMessages(messages) {
     return messages.filter(Boolean).join('\n');
@@ -141,6 +142,15 @@ function createBackgroundWarning(message, code = 'background-removal-v2') {
     return createValidationWarning('backgroundRemoval', code, message);
 }
 
+function base64ToPngBlob(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+    return new Blob([bytes], { type: 'image/png' });
+}
+
 async function createValidatedAsset(file) {
     const fileValidation = validateImageFile(file);
     if (!fileValidation.valid) {
@@ -168,6 +178,8 @@ export function useEmoteBatch() {
     const detectionRef = useRef(null);
     const exportAbortRef = useRef(null);
     const exportDownloadUrlRef = useRef(null);
+    const exportRunIdRef = useRef(0);
+    const exportStateRef = useRef(null);
 
     const [emotes, setEmotes] = useState([]);
     const [assets, setAssets] = useState({});
@@ -179,9 +191,11 @@ export function useEmoteBatch() {
     const [exportOptions, setExportOptions] = useState({
         presetId: 'twitch-static-manual',
         scope: 'all',
+        activeOutputSize: 112,
     });
     const [exportState, setExportState] = useState({
         status: 'idle',
+        runId: null,
         progress: null,
         summary: null,
         manifest: null,
@@ -209,7 +223,8 @@ export function useEmoteBatch() {
         previewUrlsRef.current = previewUrls;
         gridDraftRef.current = gridDraft;
         exportDownloadUrlRef.current = exportState.downloadUrl;
-    }, [emotes, assets, previewUrls, gridDraft, exportState.downloadUrl]);
+        exportStateRef.current = exportState;
+    }, [emotes, assets, previewUrls, gridDraft, exportState]);
 
     useEffect(() => () => {
         detectionRef.current?.cancel?.();
@@ -726,6 +741,7 @@ export function useEmoteBatch() {
             if (current.downloadUrl) URL.revokeObjectURL(current.downloadUrl);
             return {
                 status: 'idle',
+                runId: null,
                 progress: null,
                 summary: null,
                 manifest: null,
@@ -743,6 +759,8 @@ export function useEmoteBatch() {
         if (targets.length === 0) return null;
 
         exportAbortRef.current?.abort();
+        const runId = exportRunIdRef.current + 1;
+        exportRunIdRef.current = runId;
         const controller = new AbortController();
         exportAbortRef.current = controller;
         setIsExporting(true);
@@ -750,6 +768,7 @@ export function useEmoteBatch() {
             if (current.downloadUrl) URL.revokeObjectURL(current.downloadUrl);
             return {
                 status: 'pending',
+                runId,
                 progress: { processedEmotes: 0, totalEmotes: targets.length, processedFiles: 0, totalFiles: 0 },
                 summary: null,
                 manifest: null,
@@ -765,6 +784,7 @@ export function useEmoteBatch() {
                 presetId: nextOptions.presetId,
                 signal: controller.signal,
                 onProgress: (progress) => {
+                    if (exportRunIdRef.current !== runId) return;
                     setExportState((current) => ({
                         ...current,
                         status: progress.status === 'pending' ? 'pending' : 'processing',
@@ -772,7 +792,22 @@ export function useEmoteBatch() {
                     }));
                 },
             });
+            if (exportRunIdRef.current !== runId) return null;
+            if (controller.signal.aborted) {
+                const error = new Error('Exportacion cancelada.');
+                error.name = 'AbortError';
+                throw error;
+            }
+            setExportState((current) => exportRunIdRef.current === runId ? {
+                ...current,
+                status: 'compressing',
+                progress: {
+                    ...current.progress,
+                    currentFile: 'Finalizando ZIP',
+                },
+            } : current);
             const blob = await result.zip.generateAsync({ type: 'blob' });
+            if (exportRunIdRef.current !== runId) return null;
             if (controller.signal.aborted) {
                 const error = new Error('Exportacion cancelada.');
                 error.name = 'AbortError';
@@ -780,8 +815,13 @@ export function useEmoteBatch() {
             }
             const downloadUrl = URL.createObjectURL(blob);
             const fileName = `${sanitizeName(`emotes-${nextOptions.presetId}`)}.zip`;
+            if (exportRunIdRef.current !== runId) {
+                URL.revokeObjectURL(downloadUrl);
+                return null;
+            }
             setExportState({
                 status: result.report.status,
+                runId,
                 progress: { processedEmotes: targets.length, totalEmotes: targets.length, processedFiles: result.report.summary.totalOutputs, totalFiles: result.report.summary.totalOutputs },
                 summary: result.report.summary,
                 manifest: result.manifest,
@@ -792,21 +832,30 @@ export function useEmoteBatch() {
             });
             return result;
         } catch (error) {
+            if (exportRunIdRef.current !== runId) return null;
             if (error.name === 'AbortError') {
-                setExportState((current) => ({ ...current, status: 'canceled', error: null }));
+                setExportState((current) => ACTIVE_EXPORT_STATUSES.has(current.status) || current.status === 'canceled'
+                    ? { ...current, status: 'canceled', error: null }
+                    : current);
                 return null;
             }
-            setExportState((current) => ({ ...current, status: 'error', error: error.message || 'No se pudo preparar la exportacion.' }));
+            setExportState((current) => ({ ...current, status: 'invalid', error: error.message || 'No se pudo preparar la exportacion.' }));
             return null;
         } finally {
-            if (exportAbortRef.current === controller) exportAbortRef.current = null;
-            setIsExporting(false);
+            if (exportRunIdRef.current === runId) {
+                if (exportAbortRef.current === controller) exportAbortRef.current = null;
+                setIsExporting(false);
+            }
         }
     }, [exportOptions, getExportTargetEmotes]);
 
     const cancelExport = useCallback(() => {
+        const currentExport = exportStateRef.current;
+        if (!ACTIVE_EXPORT_STATUSES.has(currentExport?.status)) return;
         exportAbortRef.current?.abort();
-        setExportState((current) => ({ ...current, status: 'canceled' }));
+        setExportState((current) => ACTIVE_EXPORT_STATUSES.has(current.status)
+            ? { ...current, status: 'canceled', error: null }
+            : current);
         setIsExporting(false);
     }, []);
 
@@ -822,15 +871,103 @@ export function useEmoteBatch() {
 
     const downloadActivePng = useCallback(async () => {
         if (!activeEmote || !activeAsset) return;
-        const canvas = await renderEmoteOutputCanvas(activeEmote, activeAsset, 112);
-        const blob = await canvasToBlob(canvas);
+        const preset = getPresetById(exportOptions.presetId);
+        const outputRules = getOutputRules(preset, activeEmote, activeAsset);
+        const outputRule = preset.id === 'twitch-static-manual'
+            ? outputRules.find((rule) => rule.width === exportOptions.activeOutputSize) || outputRules[0]
+            : outputRules[0];
+        const safeName = sanitizeName(activeEmote.name);
+        const { encoded, validation } = await createValidatedEmoteOutput(activeEmote, activeAsset, preset, outputRule, safeName);
+
+        if (!validation.valid) {
+            const summary = {
+                totalItems: 1,
+                validItems: 0,
+                invalidItems: 1,
+                totalOutputs: 1,
+                validOutputs: 0,
+                invalidOutputs: 1,
+                totalBytes: encoded.bytes || 0,
+            };
+            setExportState({
+                status: 'invalid',
+                runId: null,
+                progress: null,
+                summary,
+                manifest: null,
+                report: {
+                    preset: preset.id,
+                    status: 'invalid',
+                    summary,
+                    items: [{
+                        id: activeEmote.id,
+                        name: safeName,
+                        status: 'invalid',
+                        valid: false,
+                        outputs: [{
+                            status: 'invalid',
+                            valid: false,
+                            errors: validation.errors,
+                            warnings: validation.warnings,
+                        }],
+                        errors: validation.errors,
+                        warnings: validation.warnings,
+                    }],
+                },
+                downloadUrl: null,
+                fileName: null,
+                error: validation.errors.join(' '),
+            });
+            return null;
+        }
+
+        const blob = encoded.blob || base64ToPngBlob(encoded.base64);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${sanitizeName(activeEmote.name)}_112.png`;
+        a.download = `${safeName}_${outputRule.suffix || outputRule.width || 'master'}.png`;
         a.click();
         URL.revokeObjectURL(url);
-    }, [activeAsset, activeEmote]);
+        const summary = {
+            totalItems: 1,
+            validItems: 1,
+            invalidItems: 0,
+            totalOutputs: 1,
+            validOutputs: 1,
+            invalidOutputs: 0,
+            totalBytes: encoded.bytes || 0,
+        };
+        setExportState({
+            status: 'valid',
+            runId: null,
+            progress: null,
+            summary,
+            manifest: null,
+            report: {
+                preset: preset.id,
+                status: 'valid',
+                summary,
+                items: [{
+                    id: activeEmote.id,
+                    name: safeName,
+                    status: 'valid',
+                    valid: true,
+                    outputs: [{
+                        status: 'valid',
+                        valid: true,
+                        errors: [],
+                        warnings: validation.warnings,
+                    }],
+                    errors: [],
+                    warnings: validation.warnings,
+                }],
+            },
+            downloadUrl: null,
+            fileName: null,
+            error: null,
+        });
+        return { encoded, validation };
+    }, [activeAsset, activeEmote, exportOptions.activeOutputSize, exportOptions.presetId]);
 
     const exportToZip = prepareExport;
 

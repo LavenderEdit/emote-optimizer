@@ -45,8 +45,16 @@ export function validateTwitchOutput(metadata, preset, outputRule) {
         errors.push('Archivo vacio.');
     }
 
+    if (metadata.pngSignatureValid === false) {
+        errors.push('Firma PNG invalida.');
+    }
+
     if (preset.transparentBackground && !metadata.hasTransparency) {
-        warnings.push('No se detecto transparencia en la salida.');
+        errors.push('La salida debe conservar transparencia real.');
+    }
+
+    if (preset.transparentBackground && metadata.transparentPixelRatio === 0) {
+        errors.push('La salida es completamente opaca.');
     }
 
     if (metadata.visiblePixelRatio === 0) {

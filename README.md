@@ -1,232 +1,106 @@
-# 🎨 EmoteStudio Pro (Emote Optimizer)
+# EmoteStudio Pro - Grid Pack Studio v1.0 beta
 
-**EmoteStudio Pro** es una aplicación web avanzada diseñada para la optimización, edición y exportación en lote de emotes para plataformas de streaming como **Twitch** y **Discord**.
+EmoteStudio Pro is a local-first web app for preparing Twitch emote packs from individual images or from a single grid image. All image analysis, background removal, cropping, validation and export work happens in the browser with Canvas, Web Workers and static JavaScript.
 
-Desarrollada con **React**, permite a los creadores de contenido preparar sus recursos gráficos de manera rápida, eficiente y profesional directamente desde el navegador.
+## Implemented Features
 
----
+- Individual image import for PNG, JPG/JPEG and static WEBP.
+- Grid pack import from a single composite image.
+- Automatic grid detection in a Web Worker with manual correction fallback.
+- Editable rows, columns, guides, gutters, cell rectangles, splits, merges and free regions.
+- Non-destructive crop documents: every emote renders from the original source asset plus crop, mask and operation parameters.
+- Batch crop generation without duplicate stale cell documents.
+- Multi-select editing for fit, padding, frame, adjustments, outline, trim and background settings.
+- Background Removal v2 with connected and global modes, edge/corner sampling, feather, despill, checkerboard/mask preview and excessive-removal warnings.
+- Twitch preview at 112, 56 and 28 px.
+- Twitch export presets:
+  - Manual: 112, 56 and 28 px PNGs.
+  - Auto-resize: one square master PNG from 112 to 4096 px, max 1 MB.
+- Export preflight with real PNG bytes, dimensions, square ratio, transparency, visible content, duplicate names and per-file status.
+- ZIP export with `manifest.json`, `export-report.json`, `export-report.html` and `invalid/` routing for failed files.
+- Export progress, cancellation, retry and active PNG download.
 
-## 🧩 Nueva dirección: Grid Pack Studio
-
-El siguiente objetivo principal del proyecto es procesar una sola imagen que contiene un **grid completo de emotes** y convertirla automáticamente en archivos independientes.
-
-El flujo previsto incluye:
-
-- Detección automática de filas, columnas, márgenes y separaciones.
-- Overlay editable para corregir cada celda.
-- Detección y exclusión de celdas vacías.
-- Recorte cuadrado sin deformar ni cortar contenido.
-- Eliminación de fondos blancos, grises o cromas conservando detalles internos.
-- Edición individual, por selección o aplicada a todo el paquete.
-- Previsualización real en 112, 56 y 28 px.
-- Validación de dimensiones, transparencia y peso.
-- Exportación Twitch en modo auto-resize o manual.
-
-La documentación funcional y técnica para desarrollar esta mejora se encuentra en:
-
-- [`AGENTS.md`](./AGENTS.md)
-- [`docs/PRODUCT_REQUIREMENTS.md`](./docs/PRODUCT_REQUIREMENTS.md)
-- [`docs/GRID_DETECTION_DESIGN.md`](./docs/GRID_DETECTION_DESIGN.md)
-- [`docs/TWITCH_EXPORT_SPEC.md`](./docs/TWITCH_EXPORT_SPEC.md)
-- [`docs/IMPLEMENTATION_ROADMAP.md`](./docs/IMPLEMENTATION_ROADMAP.md)
-
----
-
-## 🚀 Características Principales
-
-### 🧩 Procesamiento por Lotes
-- Carga múltiples imágenes simultáneamente (PNG, JPG, WEBP).
-- Soporte para selección manual o *drag & drop*.
-
-### 🎯 Eliminación de Fondo Inteligente
-- Herramienta de gotero interactiva.
-- Algoritmo **Flood Fill** con tolerancia ajustable.
-- Eliminación precisa de fondos o croma.
-
-### 🖌️ Pincel de Restauración
-- Recupera áreas borradas accidentalmente.
-- Atajo: `Shift + Arrastrar`.
-
-### 🎚️ Ajustes de Imagen Profesionales
-- Brillo
-- Contraste
-- Saturación
-- Enfoque (*Sharpening*)
-- Procesamiento a nivel de pixel.
-
-### ⚪ Borde Automático
-- Generación de contornos blancos dinámicos.
-- Mejora la legibilidad sobre fondos oscuros.
-
-### 👀 Previsualización en Tiempo Real
-- Visualización en resoluciones de Twitch:
-  - 112px
-  - 56px
-  - 28px
-
-### 💬 Simulador de Chat
-- Simula el comportamiento del emote en chat real.
-- Compatible con modo claro y oscuro.
-
-### 📦 Exportación Empaquetada
-- Redimensionamiento de alta calidad.
-- Generación automática de todas las resoluciones.
-- Exportación en archivo `.zip` listo para subir.
-
-### ↩️ Historial de Cambios
-- Sistema de deshacer (`Ctrl + Z`).
-
----
-
-## 🏗️ Arquitectura y Tecnologías
-
-El proyecto utiliza herramientas modernas del ecosistema frontend para garantizar alto rendimiento en procesamiento de imágenes:
-
-- **Framework:** React 19
-- **Build Tool:** Vite
-- **Estilos:** Tailwind CSS v4
-- **Iconos:** Lucide React
-- **Manejo de archivos:** JSZip
-- **Procesamiento de imágenes:** Canvas API (algoritmos personalizados)
-
----
-
-## 📁 Estructura del Proyecto
-
-```text
-/src
-├── components/
-│   ├── UI
-│   ├── Layout
-│   └── Workspace
-│
-├── hooks/
-│   ├── useCanvasInteraction
-│   ├── useDragAndDrop
-│   ├── useEmoteBatch
-│   └── useImageProcessor
-│
-├── utils/
-│   ├── imageProcessing/
-│   │   ├── floodFill
-│   │   ├── convolution
-│   │   └── colorAlgorithms
-│   │
-│   └── exportUtils.js
-```
-
----
-
-## ⚙️ Instalación y Uso Local
-
-### 📌 Requisitos
-- Node.js instalado
-
-### 🔧 Pasos
+## Local Usage
 
 ```bash
-# Clonar el repositorio
-git clone <url-del-repositorio>
-
-# Entrar al proyecto
-cd emote-optimizer
-
-# Instalar dependencias
 npm install
-
-# Ejecutar en desarrollo
 npm run dev
 ```
 
-Abrir en el navegador:
+Open `http://localhost:5173`.
 
-```text
-http://localhost:5173
-```
+### Individual Images
 
----
+1. Choose `Imagen individual` or drag image files into the app.
+2. Adjust background, trim, fit, padding, zoom, position, image adjustments and outline.
+3. Preview 112, 56 and 28 px.
+4. Export the active PNG or a Twitch ZIP package.
 
-## 🧪 Comandos Disponibles
+### Grid Packs
 
-```bash
-npm run dev       # Ejecuta en modo desarrollo (HMR)
-npm run build     # Construcción para producción
-npm run preview   # Previsualiza build de producción
-npm run lint      # Analiza el código con ESLint
-```
+1. Choose `Paquete en grid`.
+2. Load a composite emote sheet.
+3. Click `Detectar automaticamente`.
+4. Review rows, columns, active cells and empty cells.
+5. Correct guides, cell rectangles, splits, merges or free regions when needed.
+6. Click `Generar recortes`.
+7. Select all generated emotes or a subset.
+8. Apply Background Removal v2 in `Connected` mode.
+9. Pick a Twitch preset and export.
+10. Review the summary before downloading the ZIP.
 
----
+## Validation And Export
 
-## 🛠️ Guía de Uso
+The exporter never marks a file valid unless the encoded PNG bytes pass validation:
 
-### 📤 Subir Imagen
+- PNG MIME and extension.
+- PNG signature when available.
+- Required dimensions.
+- Square output.
+- Real transparency when the preset requires it.
+- Visible non-empty content.
+- Byte limits.
 
-- Arrastra archivos al lienzo o usa el botón de subida.
-- Soporta múltiples imágenes.
+Invalid files are blocked from the main package path and written under `invalid/` with exact error messages in the manifest and reports.
 
-### 🎯 Borrar Color
-
-- Selecciona el gotero.
-- Haz clic en el color de fondo.
-- Ajusta la tolerancia si es necesario.
-
-### 🖌️ Restaurar Áreas
-
-- Mantén `Shift` y arrastra sobre zonas borradas.
-
-### 📦 Exportar
-
-- Haz clic en **Exportar Emotes**.
-- Se generará un archivo `.zip` con todas las resoluciones.
-
----
-
-## 💡 Notas Técnicas
-
-- Procesamiento completamente en cliente (browser).
-- Uso intensivo de Canvas API para manipulación a nivel de pixel.
-- Algoritmos optimizados:
-  - Flood Fill
-  - Convolución (sharpen)
-  - Reducción progresiva de imagen
-
----
-
-## 📌 Futuras Mejoras
-
-- Importación y recorte de grids de paquetes.
-- Selección múltiple y ajustes masivos.
-- Presets y validadores versionados.
-- Persistencia local de proyectos.
-- Soporte para GIF animados.
-- Integración directa con APIs de Twitch/Discord.
-- Presets de estilos de emotes.
-- IA local para eliminación de fondo.
-
----
-
-## 🧑‍💻 Autor
-
-Juan S. Pimentel Lalangui
-
----
-
-## Implementado ahora
-
-Comandos nuevos:
+## Commands
 
 ```bash
+npm run lint
 npm run test
-npm run test:watch
 npm run test:coverage
+npm run build
+npm run test:e2e
 ```
 
-Flujo manual de grid:
+`npm run test:e2e` uses Playwright and starts Vite automatically.
 
-- Usa `Paquete en grid` para cargar una sola imagen compuesta.
-- Ajusta filas, columnas, margenes, gutters e inset desde el panel lateral.
-- Arrastra las guias del overlay para corregir limites antes de recortar.
-- Haz clic en una celda o usa la lista de revision para activarla, omitirla o marcarla como vacia.
-- `Generar recortes` crea emotes independientes desde las celdas activas sin estirar contenido rectangular.
-- La exportacion Twitch manual usa un canvas cuadrado transparente con encuadre `contain` y escribe `manifest.json` y `export-report.json` dentro del ZIP.
-- `Detectar automaticamente` propone filas, columnas y celdas vacias/dudosas; el resultado siempre queda editable en el grid manual antes de generar recortes.
+## Deployment
+
+The app is static and local-first. No server API is required.
+
+Cloudflare Pages settings:
+
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Node version: 22 or newer
+
+The repository includes:
+
+- `wrangler.toml` with `pages_build_output_dir = "dist"`.
+- `public/_redirects` for SPA fallback.
+
+Manual Cloudflare Pages deployment can use the dashboard or Wrangler after authentication.
+
+## Known Limitations
+
+- Animated GIF/WebP emotes are not supported in this beta.
+- Project persistence and IndexedDB recovery are not complete.
+- Background Removal v2 `Global` mode is intentionally aggressive and can remove white eyes, teeth, text or highlights.
+- Automatic grid detection is optimized for clear rows, columns and gutters; low-confidence results must be corrected manually.
+- Very large grids can take longer in browser-only processing.
+- Export currently targets Twitch static emotes; Discord and animated preset validation remain future work.
+
+## Privacy
+
+Images are processed locally in the browser. The app does not upload images by default. Object URLs and generated previews are revoked when no longer needed.
