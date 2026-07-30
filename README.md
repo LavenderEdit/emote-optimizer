@@ -6,6 +6,32 @@ Desarrollada con **React**, permite a los creadores de contenido preparar sus re
 
 ---
 
+## 🧩 Nueva dirección: Grid Pack Studio
+
+El siguiente objetivo principal del proyecto es procesar una sola imagen que contiene un **grid completo de emotes** y convertirla automáticamente en archivos independientes.
+
+El flujo previsto incluye:
+
+- Detección automática de filas, columnas, márgenes y separaciones.
+- Overlay editable para corregir cada celda.
+- Detección y exclusión de celdas vacías.
+- Recorte cuadrado sin deformar ni cortar contenido.
+- Eliminación de fondos blancos, grises o cromas conservando detalles internos.
+- Edición individual, por selección o aplicada a todo el paquete.
+- Previsualización real en 112, 56 y 28 px.
+- Validación de dimensiones, transparencia y peso.
+- Exportación Twitch en modo auto-resize o manual.
+
+La documentación funcional y técnica para desarrollar esta mejora se encuentra en:
+
+- [`AGENTS.md`](./AGENTS.md)
+- [`docs/PRODUCT_REQUIREMENTS.md`](./docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/GRID_DETECTION_DESIGN.md`](./docs/GRID_DETECTION_DESIGN.md)
+- [`docs/TWITCH_EXPORT_SPEC.md`](./docs/TWITCH_EXPORT_SPEC.md)
+- [`docs/IMPLEMENTATION_ROADMAP.md`](./docs/IMPLEMENTATION_ROADMAP.md)
+
+---
+
 ## 🚀 Características Principales
 
 ### 🧩 Procesamiento por Lotes
@@ -67,7 +93,7 @@ El proyecto utiliza herramientas modernas del ecosistema frontend para garantiza
 
 ## 📁 Estructura del Proyecto
 
-```
+```text
 /src
 ├── components/
 │   ├── UI
@@ -87,9 +113,9 @@ El proyecto utiliza herramientas modernas del ecosistema frontend para garantiza
 │   │   └── colorAlgorithms
 │   │
 │   └── exportUtils.js
-
 ```
 
+---
 
 ## ⚙️ Instalación y Uso Local
 
@@ -114,7 +140,7 @@ npm run dev
 
 Abrir en el navegador:
 
-```
+```text
 http://localhost:5173
 ```
 
@@ -135,44 +161,47 @@ npm run lint      # Analiza el código con ESLint
 
 ### 📤 Subir Imagen
 
-* Arrastra archivos al lienzo o usa el botón de subida.
-* Soporta múltiples imágenes.
+- Arrastra archivos al lienzo o usa el botón de subida.
+- Soporta múltiples imágenes.
 
 ### 🎯 Borrar Color
 
-* Selecciona el gotero.
-* Haz clic en el color de fondo.
-* Ajusta la tolerancia si es necesario.
+- Selecciona el gotero.
+- Haz clic en el color de fondo.
+- Ajusta la tolerancia si es necesario.
 
 ### 🖌️ Restaurar Áreas
 
-* Mantén `Shift` y arrastra sobre zonas borradas.
+- Mantén `Shift` y arrastra sobre zonas borradas.
 
 ### 📦 Exportar
 
-* Haz clic en **"Exportar Emotes"**.
-* Se generará un archivo `.zip` con todas las resoluciones.
+- Haz clic en **Exportar Emotes**.
+- Se generará un archivo `.zip` con todas las resoluciones.
 
 ---
 
 ## 💡 Notas Técnicas
 
-* Procesamiento completamente en cliente (browser).
-* Uso intensivo de Canvas API para manipulación a nivel de pixel.
-* Algoritmos optimizados:
-
-  * Flood Fill
-  * Convolución (sharpen)
-  * Reducción progresiva de imagen
+- Procesamiento completamente en cliente (browser).
+- Uso intensivo de Canvas API para manipulación a nivel de pixel.
+- Algoritmos optimizados:
+  - Flood Fill
+  - Convolución (sharpen)
+  - Reducción progresiva de imagen
 
 ---
 
-## 📌 Futuras Mejoras (Opcional)
+## 📌 Futuras Mejoras
 
-* Soporte para GIF animados
-* Integración directa con APIs de Twitch/Discord
-* Presets de estilos de emotes
-* IA para eliminación de fondo
+- Importación y recorte de grids de paquetes.
+- Selección múltiple y ajustes masivos.
+- Presets y validadores versionados.
+- Persistencia local de proyectos.
+- Soporte para GIF animados.
+- Integración directa con APIs de Twitch/Discord.
+- Presets de estilos de emotes.
+- IA local para eliminación de fondo.
 
 ---
 
