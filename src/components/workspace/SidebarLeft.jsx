@@ -1,10 +1,11 @@
 import React from 'react';
-import { Image as ImageIcon, Pipette, Wand2, Settings2, SunMedium, Contrast, Palette, Zap } from 'lucide-react';
+import { Grid2X2, Image as ImageIcon, Pipette, Wand2, Settings2, SunMedium, Contrast, Palette, Zap } from 'lucide-react';
 import ToolButton from '../ui/ToolButton';
 
 export default function SidebarLeft({
     theme,
     onUploadClick,
+    onGridUploadClick,
     isEyedropperActive,
     onEyedropperToggle,
     tolerance,
@@ -24,6 +25,13 @@ export default function SidebarLeft({
                 label="Subir Imagen"
                 active={!hasImage}
                 onClick={onUploadClick}
+                theme={theme}
+            />
+
+            <ToolButton
+                icon={<Grid2X2 size={20} />}
+                label="Subir Grid"
+                onClick={onGridUploadClick}
                 theme={theme}
             />
 

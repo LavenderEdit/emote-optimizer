@@ -5,13 +5,20 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { useCanvasInteraction } from '../../hooks/useCanvasInteraction';
 import EmptyDropzone from './EmptyDropzone';
 import ActiveCanvas from './ActiveCanvas';
+import GridImportWorkspace from '../../features/grid-import/components/GridImportWorkspace';
 
 export default function CanvasArea({
     theme,
     imageSrc,
     onImageRemove,
     onUploadClick,
+    onGridUploadClick,
     onFileDrop,
+    gridDraft,
+    onGridDraftChange,
+    onGridGenerate,
+    onGridCancel,
+    isGeneratingGrid,
     isEyedropperActive,
     tolerance,
     isAutoOutlineActive,
@@ -43,10 +50,20 @@ export default function CanvasArea({
             className={`flex-1 relative flex items-center justify-center p-8 transition-all duration-200 ${dragBgClass}`}
             {...dragHandlers}
         >
-            {!imageSrc ? (
+            {gridDraft ? (
+                <GridImportWorkspace
+                    draft={gridDraft}
+                    theme={theme}
+                    onDraftChange={onGridDraftChange}
+                    onGenerate={onGridGenerate}
+                    onCancel={onGridCancel}
+                    isGenerating={isGeneratingGrid}
+                />
+            ) : !imageSrc ? (
                 <EmptyDropzone
                     currentStyles={currentStyles}
                     onUploadClick={onUploadClick}
+                    onGridUploadClick={onGridUploadClick}
                 />
             ) : (
                 <ActiveCanvas
