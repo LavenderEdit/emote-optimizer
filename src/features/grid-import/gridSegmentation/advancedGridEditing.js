@@ -1,5 +1,8 @@
-import { roundRect } from '../../../shared/math/rect';
+import { clamp, normalizeRect, roundRect } from '../../../shared/math/rect';
+import { updateBandEdge } from './createUniformGrid';
 import { rebuildDraftFromBands, updateDraftCell } from './gridDraft';
+
+const MIN_CELL_SIZE = 8;
 
 export function pushDraftHistory(draft) {
     return {
@@ -64,13 +67,17 @@ export function removeGuide(draft, axis, index = null) {
 export function nudgeGuide(draft, guide, delta) {
     if (!guide) return draft;
     const bands = guide.axis === 'x' ? draft.columnBands : draft.rowBands;
-    const nudgedBands = bands.map((band, index) => {
-        if (index !== guide.index) return band;
-        return {
-            ...band,
-            [guide.edge]: Math.max(0, band[guide.edge] + delta),
-        };
-    });
+    const size = guide.axis === 'x' ? draft.source.width : draft.source.height;
+    const currentBand = bands[guide.index];
+    if (!currentBand) return draft;
+    const nudgedBands = updateBandEdge(
+        bands,
+        guide.index,
+        guide.edge,
+        currentBand[guide.edge] + delta,
+        size,
+        MIN_CELL_SIZE,
+    );
 
     return guide.axis === 'x'
         ? rebuildDraftFromBands(pushDraftHistory(draft), draft.rowBands, nudgedBands)
@@ -78,11 +85,16 @@ export function nudgeGuide(draft, guide, delta) {
 }
 
 export function editCellRect(draft, cellId, rect) {
-    const nextRect = roundRect(rect);
+    const cell = draft.cells.find((item) => item.id === cellId);
+    if (!cell) return draft;
+    const result = normalizeCellRect(rect, draft.source);
     return updateDraftCell(pushDraftHistory(draft), cellId, {
-        sourceRect: nextRect,
-        contentRect: nextRect,
+        sourceRect: result.rect,
+        contentRect: result.rect,
         manualRect: true,
+        manualRegion: true,
+        sourceGridCellIds: [getSourceGridCellId(cell)],
+        errors: result.errors,
     });
 }
 
@@ -99,8 +111,12 @@ export function splitCell(draft, cellId, direction) {
     const baseCell = {
         ...cell,
         manualRect: true,
+        manualRegion: true,
+        sourceGridCellId: getSourceGridCellId(cell),
+        sourceGridCellIds: [getSourceGridCellId(cell)],
         confidence: Math.min(cell.confidence ?? 1, 0.72),
         warnings: [...(cell.warnings || []), 'Celda dividida manualmente.'],
+        errors: [],
     };
 
     return {
@@ -133,8 +149,14 @@ export function mergeAdjacentCells(draft, cellId) {
                 sourceRect: mergedRect,
                 contentRect: mergedRect,
                 manualRect: true,
+                manualRegion: true,
+                sourceGridCellIds: Array.from(new Set([
+                    ...(item.sourceGridCellIds || [getSourceGridCellId(item)]),
+                    ...(neighbor.sourceGridCellIds || [getSourceGridCellId(neighbor)]),
+                ])),
                 name: `${cell.name}_${neighbor.name}`,
                 warnings: [...(item.warnings || []), 'Celda fusionada manualmente.'],
+                errors: [],
             } : item),
         generatedCellKeys: {},
     };
@@ -181,10 +203,59 @@ export function addFreeRegion(draft) {
                 name: `region_${String(index).padStart(3, '0')}`,
                 warnings: ['Region libre agregada manualmente.'],
                 freeRegion: true,
+                manualRegion: true,
+                sourceGridCellIds: [],
+                errors: [],
             },
         ],
         generatedCellKeys: {},
     };
+}
+
+function normalizeCellRect(rect, source) {
+    const errors = [];
+    const normalized = normalizeRect({
+        x: Number.isFinite(rect.x) ? rect.x : 0,
+        y: Number.isFinite(rect.y) ? rect.y : 0,
+        width: Number.isFinite(rect.width) ? rect.width : MIN_CELL_SIZE,
+        height: Number.isFinite(rect.height) ? rect.height : MIN_CELL_SIZE,
+    });
+
+    if (rect.width < 0 || rect.height < 0) {
+        errors.push('Dimensiones negativas normalizadas.');
+    }
+
+    if (normalized.width <= 0 || normalized.height <= 0) {
+        errors.push('El crop no puede tener tamano cero.');
+    }
+
+    const width = clamp(Math.round(Math.max(MIN_CELL_SIZE, normalized.width)), MIN_CELL_SIZE, source.width);
+    const height = clamp(Math.round(Math.max(MIN_CELL_SIZE, normalized.height)), MIN_CELL_SIZE, source.height);
+    const x = clamp(Math.round(normalized.x), 0, source.width - width);
+    const y = clamp(Math.round(normalized.y), 0, source.height - height);
+    const nextRect = { x, y, width, height };
+
+    if (
+        nextRect.x !== Math.round(normalized.x) ||
+        nextRect.y !== Math.round(normalized.y) ||
+        nextRect.width !== Math.round(normalized.width) ||
+        nextRect.height !== Math.round(normalized.height)
+    ) {
+        errors.push('Crop ajustado a los limites del asset.');
+    }
+
+    return {
+        rect: nextRect,
+        errors: [...new Set(errors)],
+    };
+}
+
+function getSourceGridCellId(cell) {
+    if (!cell) return null;
+    if (cell.sourceGridCellId) return cell.sourceGridCellId;
+    if (cell.sourceGridCellIds?.length) return cell.sourceGridCellIds[0];
+    const match = cell.id.match(/^r\d+c\d+/);
+    return match?.[0] || cell.id;
 }
 
 function createDraftSnapshot(draft) {

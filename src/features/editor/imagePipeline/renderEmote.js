@@ -79,7 +79,7 @@ export async function renderEmoteOutputCanvas(emote, asset, targetSize) {
 }
 
 export function createOutputPlacement(sourceWidth, sourceHeight, targetSize, emote = {}) {
-    const safePadding = clamp(emote.padding || 0, 0, Math.floor(targetSize / 2) - 1);
+    const safePadding = clamp(resolveOutputRelativeValue(emote.padding || 0, targetSize), 0, Math.floor(targetSize / 2) - 1);
     const drawableSize = targetSize - safePadding * 2;
     const fitMode = emote.fitMode || 'contain';
     const baseScale = fitMode === 'cover'
@@ -90,8 +90,8 @@ export function createOutputPlacement(sourceWidth, sourceHeight, targetSize, emo
     const scale = baseScale * manualZoom;
     const width = Math.max(1, Math.round(sourceWidth * scale));
     const height = Math.max(1, Math.round(sourceHeight * scale));
-    const offsetX = fitMode === 'manual' ? Math.round(frame.offsetX ?? emote.offsetX ?? 0) : 0;
-    const offsetY = fitMode === 'manual' ? Math.round(frame.offsetY ?? emote.offsetY ?? 0) : 0;
+    const offsetX = fitMode === 'manual' ? resolveOutputRelativeValue(frame.offsetX ?? emote.offsetX ?? 0, targetSize) : 0;
+    const offsetY = fitMode === 'manual' ? resolveOutputRelativeValue(frame.offsetY ?? emote.offsetY ?? 0, targetSize) : 0;
 
     return {
         x: Math.round((targetSize - width) / 2 + offsetX),
@@ -100,6 +100,14 @@ export function createOutputPlacement(sourceWidth, sourceHeight, targetSize, emo
         height,
         scale,
     };
+}
+
+function resolveOutputRelativeValue(value, targetSize) {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    if (Math.abs(safeValue) <= 1) {
+        return Math.round(safeValue * targetSize);
+    }
+    return Math.round(safeValue);
 }
 
 export function applyDocumentOperations(canvas, emote) {

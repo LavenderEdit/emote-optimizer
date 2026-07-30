@@ -30,4 +30,25 @@ describe('createOutputPlacement', () => {
         expect(placement.x).toBe(-12);
         expect(placement.y).toBe(-22);
     });
+
+    it('keeps relative framing consistent across Twitch output sizes', () => {
+        const emote = {
+            fitMode: 'manual',
+            padding: 0.1,
+            frame: { zoom: 1.25, offsetX: 0.12, offsetY: -0.08 },
+        };
+
+        const placements = [112, 56, 28].map((size) => ({
+            size,
+            placement: createOutputPlacement(100, 80, size, emote),
+        }));
+
+        const centerX = placements.map(({ size, placement }) => (placement.x + placement.width / 2 - size / 2) / size);
+        const centerY = placements.map(({ size, placement }) => (placement.y + placement.height / 2 - size / 2) / size);
+        const widthRatio = placements.map(({ size, placement }) => placement.width / size);
+
+        expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(0.04);
+        expect(Math.max(...centerY) - Math.min(...centerY)).toBeLessThan(0.04);
+        expect(Math.max(...widthRatio) - Math.min(...widthRatio)).toBeLessThan(0.04);
+    });
 });

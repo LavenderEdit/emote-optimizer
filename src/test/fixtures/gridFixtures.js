@@ -18,8 +18,10 @@ export const referenceGrid5x5Fixture = {
 export const realReferenceGrid994x1001Fixture = {
     ...referenceGrid5x5Fixture,
     id: 'real-reference-994x1001',
-    sourceKind: 'documented-real-reference',
-    notes: 'Fixture specs mirror the documented 994 x 1001 real reference. No binary raster is present in the repository or local attachments.',
+    sourceKind: 'user-provided-reference-normalized',
+    imagePath: 'src/test/fixtures/images/reference-grid-994x1001.png',
+    originalDimensions: { width: 2048, height: 2062 },
+    notes: 'Normalized from the user-provided PNG reference to the documented 994 x 1001 integration size.',
 };
 
 export const grayBackgroundGridFixture = {

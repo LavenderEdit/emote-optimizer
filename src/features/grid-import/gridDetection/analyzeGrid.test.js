@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+import process from 'node:process';
 import { grayBackgroundGridFixture, irregularGutterGridFixture, shadowedGridFixture, sixByThreeGridFixture, threeByFourGridFixture } from '../../../test/fixtures/gridFixtures';
-import { createGridFixtureImageData, createRealReferenceGridImageData, createSyntheticReferenceGridImageData } from '../../../test/fixtures/syntheticGridImageData';
+import { createGridFixtureImageData, createSyntheticReferenceGridImageData } from '../../../test/fixtures/syntheticGridImageData';
+import { readPngImageData } from '../../../test/fixtures/readPngImageData';
 import { analyzeGridImageData } from './analyzeGrid';
 
 describe('analyzeGridImageData', () => {
@@ -22,9 +25,11 @@ describe('analyzeGridImageData', () => {
     });
 
     it('keeps the documented real 994x1001 reference fixture at 5x5', () => {
-        const fixture = createRealReferenceGridImageData();
+        const fixture = readPngImageData(resolve(process.cwd(), 'src/test/fixtures/images/reference-grid-994x1001.png'));
         const analysis = analyzeGridImageData(fixture);
 
+        expect(fixture.width).toBe(994);
+        expect(fixture.height).toBe(1001);
         expect(analysis.rows).toBe(5);
         expect(analysis.columns).toBe(5);
         expect(analysis.cells).toHaveLength(25);

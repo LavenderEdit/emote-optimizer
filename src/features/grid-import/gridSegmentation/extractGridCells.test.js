@@ -43,7 +43,7 @@ describe('extractGridCellsToDocuments', () => {
         const [initialDocument] = extractGridCellsToDocuments(draft);
         const editedDocument = {
             ...initialDocument,
-            padding: 18,
+            padding: 0.18,
             fitMode: 'cover',
             adjustments: { brightness: 12, contrast: 3, saturation: 4, sharpen: 5 },
         };
@@ -61,7 +61,7 @@ describe('extractGridCellsToDocuments', () => {
         expect(replacementDocuments).toHaveLength(1);
         expect(nextEmotes).toHaveLength(1);
         expect(nextEmotes[0].id).toBe(editedDocument.id);
-        expect(nextEmotes[0].padding).toBe(18);
+        expect(nextEmotes[0].padding).toBe(0.18);
         expect(nextEmotes[0].fitMode).toBe('cover');
         expect(nextEmotes[0].name).toBe('changed_cell');
         expect(nextEmotes[0].cropRect.x).toBe(2);

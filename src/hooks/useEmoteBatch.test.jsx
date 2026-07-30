@@ -96,7 +96,7 @@ describe('useEmoteBatch', () => {
 
         const firstDocument = result.current.emotes[0];
         await act(async () => {
-            result.current.updateActiveEmote({ padding: 22 });
+            result.current.updateActiveEmote({ padding: 0.22 });
         });
         await act(async () => {
             result.current.updateGridDraft((draft) => ({
@@ -113,7 +113,7 @@ describe('useEmoteBatch', () => {
         const regeneratedDocuments = result.current.emotes.filter((emote) => emote.id === firstDocument.id);
         expect(regeneratedDocuments).toHaveLength(1);
         expect(result.current.emotes).toHaveLength(25);
-        expect(regeneratedDocuments[0].padding).toBe(22);
+        expect(regeneratedDocuments[0].padding).toBe(0.22);
         expect(regeneratedDocuments[0].name).toBe('renamed');
         expect(regeneratedDocuments[0].cropRect.x).toBe(3);
     });
@@ -174,14 +174,14 @@ describe('useEmoteBatch', () => {
         await act(async () => {
             result.current.updateSelectedOrActiveEmotes({
                 fitMode: 'manual',
-                padding: 12,
-                frame: { zoom: 1.4, offsetX: 6, offsetY: -3 },
+                padding: 0.12,
+                frame: { zoom: 1.4, offsetX: 0.06, offsetY: -0.03 },
             });
         });
 
         expect(result.current.selectedEmoteIds).toHaveLength(25);
         expect(result.current.emotes.every((emote) => emote.fitMode === 'manual')).toBe(true);
-        expect(result.current.emotes.every((emote) => emote.padding === 12)).toBe(true);
+        expect(result.current.emotes.every((emote) => emote.padding === 0.12)).toBe(true);
         expect(result.current.emotes.every((emote) => emote.frame.zoom === 1.4)).toBe(true);
     });
 
@@ -199,7 +199,7 @@ describe('useEmoteBatch', () => {
             result.current.selectNoEmotes();
             result.current.updateActiveEmote({
                 fitMode: 'cover',
-                padding: 8,
+                padding: 0.08,
                 adjustments: { brightness: 9, contrast: 4, saturation: 3, sharpen: 2 },
             });
         });
@@ -214,8 +214,42 @@ describe('useEmoteBatch', () => {
         });
 
         expect(result.current.emotes[1].fitMode).toBe('cover');
-        expect(result.current.emotes[1].padding).toBe(8);
+        expect(result.current.emotes[1].padding).toBe(0.08);
         expect(result.current.emotes[1].adjustments.brightness).toBe(9);
+    });
+
+    it('does not paste erase or restore points between different emotes', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            result.current.selectNoEmotes();
+            result.current.updateActiveEmote({
+                tolerance: 44,
+                erasurePoints: [{ x: 3, y: 4, color: [255, 255, 255] }],
+                restorePoints: [{ x: 8, y: 9 }],
+            });
+        });
+        await act(async () => {
+            result.current.copyActiveSettings();
+        });
+        await act(async () => {
+            result.current.toggleEmoteSelection(result.current.emotes[1].id);
+        });
+        await act(async () => {
+            result.current.pasteSettingsToSelected();
+        });
+
+        expect(result.current.emotes[1].tolerance).toBe(44);
+        expect(result.current.emotes[1].erasurePoints).toEqual([]);
+        expect(result.current.emotes[1].restorePoints).toEqual([]);
+        expect(result.current.emotes[1].backgroundRemoval.erasurePoints).toEqual([]);
     });
 
     it('trims selected emotes and stores crop warnings', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createGridDraft } from './gridDraft';
-import { addFreeRegion, addGuide, editCellRect, mergeAdjacentCells, redoDraft, reorderCells, splitCell, undoDraft } from './advancedGridEditing';
+import { addFreeRegion, addGuide, editCellRect, mergeAdjacentCells, nudgeGuide, redoDraft, reorderCells, splitCell, undoDraft } from './advancedGridEditing';
 
 const asset = {
     id: 'grid',
@@ -38,11 +38,40 @@ describe('advanced grid editing', () => {
         expect(reordered.cells[0].id).toBe('r1c2');
     });
 
+    it('constrains guide nudges with the same minimum geometry as dragging', () => {
+        const draft = createGridDraft(asset, { rows: 1, columns: 2 });
+        const nudged = nudgeGuide(draft, { axis: 'x', index: 1, edge: 'start' }, 99);
+
+        expect(nudged.columnBands[1].start).toBe(92);
+        expect(nudged.columnBands[1].end).toBe(100);
+        expect(nudged.cells[1].sourceRect.width).toBe(8);
+    });
+
+    it('normalizes invalid manual cell rectangles inside the asset', () => {
+        const draft = createGridDraft(asset, { rows: 1, columns: 1 });
+        const edited = editCellRect(draft, 'r1c1', { x: 90, y: 110, width: -50, height: 0 });
+        const cell = edited.cells[0];
+
+        expect(cell.sourceRect).toEqual({ x: 40, y: 92, width: 50, height: 8 });
+        expect(cell.errors).toContain('Dimensiones negativas normalizadas.');
+        expect(cell.errors).toContain('El crop no puede tener tamano cero.');
+        expect(cell.errors).toContain('Crop ajustado a los limites del asset.');
+    });
+
     it('adds free regions outside the regular grid flow', () => {
         const draft = createGridDraft(asset, { rows: 1, columns: 1 });
         const next = addFreeRegion(draft);
 
         expect(next.segmentationMode).toBe('free');
         expect(next.cells.at(-1).freeRegion).toBe(true);
+    });
+
+    it('preserves a free region after moving a guide', () => {
+        const draft = createGridDraft(asset, { rows: 2, columns: 2 });
+        const withFreeRegion = addFreeRegion(draft);
+        const nudged = nudgeGuide(withFreeRegion, { axis: 'x', index: 0, edge: 'end' }, -10);
+
+        expect(nudged.cells.some((cell) => cell.freeRegion && cell.name === 'region_005')).toBe(true);
+        expect(nudged.cells).toHaveLength(5);
     });
 });

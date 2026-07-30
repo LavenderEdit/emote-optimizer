@@ -58,9 +58,13 @@ function createSettingsPatch(emote, parts = ['adjustments', 'background', 'fit',
     }
 
     if (parts.includes('background')) {
-        patch.backgroundRemoval = cloneSettings(emote.backgroundRemoval);
-        patch.erasurePoints = cloneSettings(emote.erasurePoints || []);
-        patch.restorePoints = cloneSettings(emote.restorePoints || []);
+        patch.backgroundRemoval = {
+            ...cloneSettings(emote.backgroundRemoval),
+            erasurePoints: [],
+            restorePoints: [],
+        };
+        patch.erasurePoints = [];
+        patch.restorePoints = [];
         patch.tolerance = emote.tolerance;
     }
 

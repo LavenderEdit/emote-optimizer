@@ -55,7 +55,7 @@ export function rebuildDraftFromSettings(draft, settings) {
         columns: grid.columns,
         rowBands: grid.rowBands,
         columnBands: grid.columnBands,
-        cells: grid.cells,
+        cells: mergeGeneratedCellsWithAdvancedRegions(grid.cells, draft.cells),
         generatedCellKeys: {},
     };
 }
@@ -79,7 +79,7 @@ export function rebuildDraftFromBands(draft, rowBands, columnBands) {
         rowBands,
         columnBands,
         generatedCellKeys: {},
-        cells: grid.cells.map((cell) => {
+        cells: mergeGeneratedCellsWithAdvancedRegions(grid.cells.map((cell) => {
             const rowBand = rowBands[cell.row];
             const columnBand = columnBands[cell.column];
             const sourceRect = {
@@ -98,7 +98,7 @@ export function rebuildDraftFromBands(draft, rowBands, columnBands) {
                     height: Math.max(1, sourceRect.height - draft.settings.inset * 2),
                 },
             };
-        }),
+        }), draft.cells),
     };
 }
 
@@ -135,4 +135,48 @@ export function createGridDraftFromAnalysis(asset, analysis) {
         generatedCellKeys: {},
         analysis,
     };
+}
+
+function mergeGeneratedCellsWithAdvancedRegions(generatedCells, previousCells = []) {
+    const advancedCells = previousCells.filter(isAdvancedRegion);
+    const occupiedGridIds = new Set();
+
+    advancedCells.forEach((cell) => {
+        const sourceIds = cell.sourceGridCellIds || (cell.sourceGridCellId ? [cell.sourceGridCellId] : []);
+        sourceIds.forEach((id) => occupiedGridIds.add(id));
+        if (sourceIds.length === 0 && isRegularGridCellId(cell.id)) {
+            occupiedGridIds.add(cell.id);
+        }
+    });
+
+    const generatedById = new Map(
+        generatedCells
+            .filter((cell) => !occupiedGridIds.has(cell.id))
+            .map((cell) => [cell.id, cell])
+    );
+    const nextCells = [];
+
+    previousCells.forEach((previous) => {
+        if (isAdvancedRegion(previous)) {
+            nextCells.push(previous);
+            return;
+        }
+
+        const generated = generatedById.get(previous.id);
+        if (generated) {
+            nextCells.push(generated);
+            generatedById.delete(previous.id);
+        }
+    });
+
+    nextCells.push(...generatedById.values());
+    return nextCells;
+}
+
+function isAdvancedRegion(cell) {
+    return Boolean(cell.freeRegion || cell.manualRegion || cell.manualRect);
+}
+
+function isRegularGridCellId(id) {
+    return /^r\d+c\d+$/.test(id);
 }

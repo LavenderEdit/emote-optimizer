@@ -34,6 +34,9 @@ export default function SidebarRight({
         : 'rounded border border-purple-600 bg-purple-600 px-2 py-1.5 text-xs text-white';
     const targetLabel = selectedCount > 0 ? `${selectedCount} seleccionados` : 'Activo';
     const frame = activeEmote?.frame || { zoom: 1, offsetX: 0, offsetY: 0 };
+    const paddingPercent = Math.round((activeEmote?.padding || 0) * 100);
+    const offsetXPercent = Math.round((frame.offsetX || 0) * 100);
+    const offsetYPercent = Math.round((frame.offsetY || 0) * 100);
 
     return (
         <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
@@ -81,12 +84,12 @@ export default function SidebarRight({
                     </div>
 
                     <RangeField
-                        label="Padding"
-                        value={activeEmote?.padding || 0}
+                        label="Padding %"
+                        value={paddingPercent}
                         min={0}
                         max={40}
                         isDark={isDark}
-                        onChange={(padding) => onUpdateTargets({ padding })}
+                        onChange={(padding) => onUpdateTargets({ padding: padding / 100 })}
                     />
                     <RangeField
                         label="Zoom"
@@ -97,20 +100,20 @@ export default function SidebarRight({
                         onChange={(zoom) => onUpdateTargets({ fitMode: 'manual', frame: { ...frame, zoom: zoom / 100 } })}
                     />
                     <RangeField
-                        label="Pos X"
-                        value={frame.offsetX || 0}
-                        min={-56}
-                        max={56}
+                        label="Pos X %"
+                        value={offsetXPercent}
+                        min={-50}
+                        max={50}
                         isDark={isDark}
-                        onChange={(offsetX) => onUpdateTargets({ fitMode: 'manual', frame: { ...frame, offsetX } })}
+                        onChange={(offsetX) => onUpdateTargets({ fitMode: 'manual', frame: { ...frame, offsetX: offsetX / 100 } })}
                     />
                     <RangeField
-                        label="Pos Y"
-                        value={frame.offsetY || 0}
-                        min={-56}
-                        max={56}
+                        label="Pos Y %"
+                        value={offsetYPercent}
+                        min={-50}
+                        max={50}
                         isDark={isDark}
-                        onChange={(offsetY) => onUpdateTargets({ fitMode: 'manual', frame: { ...frame, offsetY } })}
+                        onChange={(offsetY) => onUpdateTargets({ fitMode: 'manual', frame: { ...frame, offsetY: offsetY / 100 } })}
                     />
 
                     <div className="grid grid-cols-2 gap-1">

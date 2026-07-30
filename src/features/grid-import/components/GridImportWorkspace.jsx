@@ -538,7 +538,10 @@ function CellWarnings({ cell, isDark }) {
 }
 
 function getCellWarnings(cell) {
-    const warnings = [...(cell.warnings || [])];
+    const warnings = [
+        ...(cell.errors || []).map((error) => `Error: ${error}`),
+        ...(cell.warnings || []),
+    ];
     if (cell.empty) warnings.push('No se exportara mientras este marcada como vacia.');
     if (cell.classification === 'uncertain') warnings.push('Clasificacion dudosa: revisa antes de generar.');
     if (cell.contentRect.width < 16 || cell.contentRect.height < 16) warnings.push('Recorte demasiado pequeno.');
