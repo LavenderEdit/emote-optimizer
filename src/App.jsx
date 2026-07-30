@@ -44,6 +44,8 @@ function App() {
           hasImage={!!activeEmote}
           onUploadClick={() => triggerUpload('individual')}
           onGridUploadClick={() => triggerUpload('grid')}
+          onUploadClick={() => triggerUpload('individual')}
+          onGridUploadClick={() => triggerUpload('grid')}
           isEyedropperActive={isEyedropperActive}
           onEyedropperToggle={() => setIsEyedropperActive(!isEyedropperActive)}
           tolerance={activeEmote?.tolerance || 30}
@@ -60,6 +62,8 @@ function App() {
             emote={activeEmote}
             asset={activeAsset}
             onImageRemove={handleRemoveActive}
+            onUploadClick={() => triggerUpload('individual')}
+            onGridUploadClick={() => triggerUpload('grid')}
             onUploadClick={() => triggerUpload('individual')}
             onGridUploadClick={() => triggerUpload('grid')}
             onFileDrop={(file) => processFiles([file])}
@@ -153,3 +157,4 @@ function DocumentThumbnail({ emote, asset }) {
 }
 
 export default App;
+

@@ -134,6 +134,19 @@ export function useEmoteBatch() {
         }
     }, []);
 
+    useEffect(() => {
+        emotesRef.current = emotes;
+    }, [emotes]);
+
+    useEffect(() => {
+        gridDraftRef.current = gridDraft;
+    }, [gridDraft]);
+
+    useEffect(() => () => {
+        emotesRef.current.forEach(revokeEmoteSource);
+        revokeGridDraft(gridDraftRef.current);
+    }, []);
+
     const updateActiveEmote = useCallback((updates) => {
         if (!activeId) return;
         setEmotes(prev => prev.map(e => e.id === activeId ? mergeEmoteUpdates(e, updates) : e));
