@@ -53,4 +53,17 @@ describe('GridImportWorkspace', () => {
 
         expect(onAutoDetect).toHaveBeenCalledTimes(1);
     });
+
+    it('supports advanced correction actions from the review panel', () => {
+        render(<Harness />);
+
+        fireEvent.click(screen.getByText('Agregar col.'));
+        expect(screen.getByText('6 activos / 6 pendientes')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Split V'));
+        expect(screen.getByDisplayValue('emote_001_a')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Region libre'));
+        expect(screen.getByDisplayValue('region_008')).toBeInTheDocument();
+    });
 });

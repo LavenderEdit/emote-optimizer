@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ScanSearch, Grid2X2, MousePointer2, RotateCcw, Scissors, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Columns3, CopyPlus, GitMerge, Grid2X2, MousePointer2, Redo2, RotateCcw, Rows3, ScanSearch, Scissors, SplitSquareHorizontal, SplitSquareVertical, Undo2, X } from 'lucide-react';
 import { rebuildDraftFromBands, rebuildDraftFromSettings, updateDraftCell } from '../gridSegmentation/gridDraft';
 import { updateBandEdge } from '../gridSegmentation/createUniformGrid';
 import { getCellGenerationKey } from '../gridSegmentation/extractGridCells';
+import {
+    addFreeRegion,
+    addGuide,
+    editCellRect,
+    mergeAdjacentCells,
+    nudgeGuide,
+    redoDraft,
+    removeGuide,
+    reorderCells,
+    splitCell,
+    undoDraft,
+} from '../gridSegmentation/advancedGridEditing';
 
 export default function GridImportWorkspace({
     draft,
@@ -15,6 +27,8 @@ export default function GridImportWorkspace({
     isDetecting,
 }) {
     const isDark = theme === 'dark';
+    const [selectedCellId, setSelectedCellId] = useState(draft.cells[0]?.id || null);
+    const [selectedGuide, setSelectedGuide] = useState(null);
     const activeCount = draft.cells.filter((cell) => cell.enabled && !cell.empty).length;
     const pendingCount = draft.cells.filter((cell) => (
         cell.enabled &&
@@ -24,6 +38,10 @@ export default function GridImportWorkspace({
 
     const updateSettings = (updates) => {
         onDraftChange((current) => rebuildDraftFromSettings(current, updates));
+    };
+
+    const applyAdvancedEdit = (updater) => {
+        onDraftChange((current) => updater(current));
     };
 
     const updateMargins = (side, value) => {
@@ -104,6 +122,11 @@ export default function GridImportWorkspace({
                         draft={draft}
                         isDark={isDark}
                         onDraftChange={onDraftChange}
+                        selectedCellId={selectedCellId}
+                        onSelectCell={setSelectedCellId}
+                        selectedGuide={selectedGuide}
+                        onSelectGuide={setSelectedGuide}
+                        onNudgeGuide={(delta) => applyAdvancedEdit((current) => nudgeGuide(current, selectedGuide, delta))}
                     />
                 </section>
 
@@ -122,6 +145,27 @@ export default function GridImportWorkspace({
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => undoDraft(current))}>
+                            <Undo2 size={14} /> Undo grid
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => redoDraft(current))}>
+                            <Redo2 size={14} /> Redo grid
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => addGuide(current, 'row'))}>
+                            <Rows3 size={14} /> Agregar fila
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => addGuide(current, 'column'))}>
+                            <Columns3 size={14} /> Agregar col.
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => removeGuide(current, 'row'))}>
+                            Quitar fila
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => removeGuide(current, 'column'))}>
+                            Quitar col.
+                        </button>
+                        <button type="button" className={secondaryButtonClass(isDark)} onClick={() => applyAdvancedEdit((current) => addFreeRegion(current))}>
+                            <CopyPlus size={14} /> Region libre
+                        </button>
                         <button type="button" className={secondaryButtonClass(isDark)} onClick={markLastCellEmpty}>
                             Ultima vacia
                         </button>
@@ -162,8 +206,14 @@ export default function GridImportWorkspace({
                     <CellReview
                         source={draft.source}
                         cells={draft.cells}
+                        selectedCellId={selectedCellId}
+                        onSelectCell={setSelectedCellId}
                         isDark={isDark}
                         onUpdateCell={updateCell}
+                        onEditRect={(cellId, rect) => applyAdvancedEdit((current) => editCellRect(current, cellId, rect))}
+                        onSplitCell={(cellId, direction) => applyAdvancedEdit((current) => splitCell(current, cellId, direction))}
+                        onMergeCell={(cellId) => applyAdvancedEdit((current) => mergeAdjacentCells(current, cellId))}
+                        onReorderCell={(cellId, direction) => applyAdvancedEdit((current) => reorderCells(current, cellId, direction))}
                     />
                 </aside>
             </div>
@@ -171,7 +221,7 @@ export default function GridImportWorkspace({
     );
 }
 
-function GridOverlay({ draft, isDark, onDraftChange }) {
+function GridOverlay({ draft, isDark, onDraftChange, selectedCellId, onSelectCell, selectedGuide, onSelectGuide, onNudgeGuide }) {
     const [drag, setDrag] = useState(null);
 
     const getSourcePoint = (event) => {
@@ -228,7 +278,21 @@ function GridOverlay({ draft, isDark, onDraftChange }) {
     };
 
     return (
-        <div className={`flex h-[calc(100%-5rem)] min-h-0 items-center justify-center overflow-auto rounded border ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}>
+        <div
+            className={`flex h-[calc(100%-5rem)] min-h-0 items-center justify-center overflow-auto rounded border ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}
+            tabIndex={0}
+            onKeyDown={(event) => {
+                if (!selectedGuide) return;
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    onNudgeGuide(event.shiftKey ? -10 : -1);
+                }
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    onNudgeGuide(event.shiftKey ? 10 : 1);
+                }
+            }}
+        >
             <div className="relative inline-block max-h-full max-w-full">
                 <img
                     src={draft.source.objectUrl}
@@ -252,11 +316,14 @@ function GridOverlay({ draft, isDark, onDraftChange }) {
                             height={cell.sourceRect.height}
                             fill={cell.enabled ? (cell.empty ? 'rgba(250, 204, 21, 0.18)' : 'rgba(34, 197, 94, 0.16)') : 'rgba(239, 68, 68, 0.20)'}
                             stroke={cell.enabled ? (cell.empty ? '#facc15' : '#22c55e') : '#ef4444'}
-                            strokeWidth={Math.max(2, draft.source.width / 500)}
+                            strokeWidth={cell.id === selectedCellId ? Math.max(5, draft.source.width / 230) : Math.max(2, draft.source.width / 500)}
                             role="button"
                             tabIndex={0}
                             aria-label={`Celda fila ${cell.row + 1}, columna ${cell.column + 1}`}
-                            onClick={() => toggleCell(cell.id)}
+                            onClick={() => {
+                                onSelectCell(cell.id);
+                                toggleCell(cell.id);
+                            }}
                             onKeyDown={(event) => {
                                 if (event.key === 'Enter' || event.key === ' ') toggleCell(cell.id);
                             }}
@@ -264,12 +331,12 @@ function GridOverlay({ draft, isDark, onDraftChange }) {
                     ))}
 
                     {draft.columnBands.flatMap((band, index) => ([
-                        <GuideLine key={`c-${index}-start`} axis="x" value={band.start} sourceSize={draft.source} onPointerDown={(event) => startDrag(event, { axis: 'x', index, edge: 'start' })} />,
-                        <GuideLine key={`c-${index}-end`} axis="x" value={band.end} sourceSize={draft.source} onPointerDown={(event) => startDrag(event, { axis: 'x', index, edge: 'end' })} />,
+                        <GuideLine key={`c-${index}-start`} axis="x" value={band.start} sourceSize={draft.source} selected={selectedGuide?.axis === 'x' && selectedGuide.index === index && selectedGuide.edge === 'start'} onPointerDown={(event) => { onSelectGuide({ axis: 'x', index, edge: 'start' }); startDrag(event, { axis: 'x', index, edge: 'start' }); }} />,
+                        <GuideLine key={`c-${index}-end`} axis="x" value={band.end} sourceSize={draft.source} selected={selectedGuide?.axis === 'x' && selectedGuide.index === index && selectedGuide.edge === 'end'} onPointerDown={(event) => { onSelectGuide({ axis: 'x', index, edge: 'end' }); startDrag(event, { axis: 'x', index, edge: 'end' }); }} />,
                     ]))}
                     {draft.rowBands.flatMap((band, index) => ([
-                        <GuideLine key={`r-${index}-start`} axis="y" value={band.start} sourceSize={draft.source} onPointerDown={(event) => startDrag(event, { axis: 'y', index, edge: 'start' })} />,
-                        <GuideLine key={`r-${index}-end`} axis="y" value={band.end} sourceSize={draft.source} onPointerDown={(event) => startDrag(event, { axis: 'y', index, edge: 'end' })} />,
+                        <GuideLine key={`r-${index}-start`} axis="y" value={band.start} sourceSize={draft.source} selected={selectedGuide?.axis === 'y' && selectedGuide.index === index && selectedGuide.edge === 'start'} onPointerDown={(event) => { onSelectGuide({ axis: 'y', index, edge: 'start' }); startDrag(event, { axis: 'y', index, edge: 'start' }); }} />,
+                        <GuideLine key={`r-${index}-end`} axis="y" value={band.end} sourceSize={draft.source} selected={selectedGuide?.axis === 'y' && selectedGuide.index === index && selectedGuide.edge === 'end'} onPointerDown={(event) => { onSelectGuide({ axis: 'y', index, edge: 'end' }); startDrag(event, { axis: 'y', index, edge: 'end' }); }} />,
                     ]))}
 
                     {draft.cells.map((cell) => (
@@ -294,7 +361,7 @@ function GridOverlay({ draft, isDark, onDraftChange }) {
     );
 }
 
-function GuideLine({ axis, value, sourceSize, onPointerDown }) {
+function GuideLine({ axis, value, sourceSize, selected, onPointerDown }) {
     const isX = axis === 'x';
     const hitWidth = Math.max(10, sourceSize.width / 140);
     const visibleWidth = Math.max(2, sourceSize.width / 500);
@@ -315,8 +382,8 @@ function GuideLine({ axis, value, sourceSize, onPointerDown }) {
                 y1={isX ? 0 : value}
                 x2={isX ? value : sourceSize.width}
                 y2={isX ? sourceSize.height : value}
-                stroke="#7c3aed"
-                strokeWidth={visibleWidth}
+                stroke={selected ? '#facc15' : '#7c3aed'}
+                strokeWidth={selected ? visibleWidth + 2 : visibleWidth}
                 pointerEvents="none"
             />
             <line
@@ -333,7 +400,7 @@ function GuideLine({ axis, value, sourceSize, onPointerDown }) {
     );
 }
 
-function CellReview({ source, cells, isDark, onUpdateCell }) {
+function CellReview({ source, cells, selectedCellId, onSelectCell, isDark, onUpdateCell, onEditRect, onSplitCell, onMergeCell, onReorderCell }) {
     return (
         <div className="mt-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide">Revisar celdas</h3>
@@ -341,7 +408,11 @@ function CellReview({ source, cells, isDark, onUpdateCell }) {
                 {cells.map((cell) => (
                     <div
                         key={cell.id}
-                        className={`rounded border p-2 text-xs ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}
+                        onClick={() => onSelectCell(cell.id)}
+                        className={`rounded border p-2 text-xs ${cell.id === selectedCellId
+                            ? isDark ? 'border-[#deb069] bg-[#3d0604]' : 'border-purple-500 bg-purple-50'
+                            : isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'
+                            }`}
                     >
                         <div className="mb-2 flex gap-2">
                             <CellThumbnail source={source} cell={cell} />
@@ -381,9 +452,49 @@ function CellReview({ source, cells, isDark, onUpdateCell }) {
                                 Vacia
                             </label>
                         </div>
+                        {cell.id === selectedCellId && (
+                            <CellRectTools
+                                cell={cell}
+                                isDark={isDark}
+                                onEditRect={(rect) => onEditRect(cell.id, rect)}
+                                onSplitCell={(direction) => onSplitCell(cell.id, direction)}
+                                onMergeCell={() => onMergeCell(cell.id)}
+                                onReorderCell={(direction) => onReorderCell(cell.id, direction)}
+                            />
+                        )}
                         <CellWarnings cell={cell} isDark={isDark} />
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+}
+
+function CellRectTools({ cell, isDark, onEditRect, onSplitCell, onMergeCell, onReorderCell }) {
+    const rect = cell.contentRect || cell.sourceRect;
+    const updateRect = (key, value) => onEditRect({ ...rect, [key]: value });
+
+    return (
+        <div className="mt-2 space-y-2">
+            <div className="grid grid-cols-4 gap-1">
+                {['x', 'y', 'width', 'height'].map((key) => (
+                    <label key={key} className="block">
+                        <span className={`mb-0.5 block text-[10px] uppercase ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>{key}</span>
+                        <input
+                            type="number"
+                            value={Math.round(rect[key])}
+                            onChange={(event) => updateRect(key, Number(event.target.value))}
+                            className={`w-full rounded border px-1 py-1 ${isDark ? 'border-[#7f6000]/50 bg-black/20 text-[#deb069]' : 'border-gray-300 bg-white text-gray-900'}`}
+                        />
+                    </label>
+                ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+                <button type="button" className={secondaryButtonClass(isDark)} onClick={() => onSplitCell('horizontal')}><SplitSquareHorizontal size={13} /> Split H</button>
+                <button type="button" className={secondaryButtonClass(isDark)} onClick={() => onSplitCell('vertical')}><SplitSquareVertical size={13} /> Split V</button>
+                <button type="button" className={secondaryButtonClass(isDark)} onClick={onMergeCell}><GitMerge size={13} /> Fusionar</button>
+                <button type="button" className={secondaryButtonClass(isDark)} onClick={() => onReorderCell('up')}><ArrowUp size={13} /> Subir</button>
+                <button type="button" className={secondaryButtonClass(isDark)} onClick={() => onReorderCell('down')}><ArrowDown size={13} /> Bajar</button>
             </div>
         </div>
     );
