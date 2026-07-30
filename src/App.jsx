@@ -19,6 +19,7 @@ function App() {
     trimSelectedEmotes, isTrimmingBatch,
     applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
     comparisonMode, setComparisonMode,
+    exportOptions, updateExportOptions, exportState, prepareExport, cancelExport, retryExport, downloadPreparedExport, downloadActivePng,
     gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
     isEyedropperActive, setIsEyedropperActive,
     isExporting,
@@ -136,6 +137,14 @@ function App() {
           isExporting={isExporting}
           totalItems={emotes.length}
           selectedCount={selectedEmoteIds.length}
+          exportOptions={exportOptions}
+          exportState={exportState}
+          onExportOptionsChange={updateExportOptions}
+          onPrepareExport={prepareExport}
+          onCancelExport={cancelExport}
+          onRetryExport={retryExport}
+          onDownloadPreparedExport={downloadPreparedExport}
+          onDownloadActivePng={downloadActivePng}
           hasSettingsClipboard={!!settingsClipboard}
           comparisonMode={comparisonMode}
           onComparisonModeChange={setComparisonMode}

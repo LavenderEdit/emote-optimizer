@@ -11,6 +11,14 @@ export default function SidebarRight({
     isExporting,
     totalItems,
     selectedCount,
+    exportOptions,
+    exportState,
+    onExportOptionsChange,
+    onPrepareExport,
+    onCancelExport,
+    onRetryExport,
+    onDownloadPreparedExport,
+    onDownloadActivePng,
     hasSettingsClipboard,
     comparisonMode,
     onComparisonModeChange,
@@ -53,6 +61,7 @@ export default function SidebarRight({
         brushRadius: activeEmote?.backgroundRemoval?.brushRadius ?? 10,
         excessiveRemovalThreshold: activeEmote?.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
     };
+    const canDownloadPrepared = exportState?.downloadUrl && (exportState.status === 'valid' || exportState.status === 'invalid');
 
     return (
         <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
@@ -257,19 +266,50 @@ export default function SidebarRight({
                 <h3 className={`font-semibold mb-4 text-sm uppercase tracking-wider ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
                     Ajustes de Exportacion
                 </h3>
-                <div className="space-y-3">
-                    <label className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${isDark ? 'border-[#7f6000] bg-[#7f6000]/10' : 'border-purple-500 bg-purple-50'}`}>
-                        <input
-                            type="radio"
-                            name="format"
-                            defaultChecked
-                            className={`mr-3 h-4 w-4 ${isDark ? 'text-[#c41026] focus:ring-[#c41026] bg-[#3d0604] border-[#7f6000] accent-[#c41026]' : 'text-purple-600 focus:ring-purple-500'}`}
-                        />
-                        <div className="flex-1">
-                            <p className="font-medium text-sm">Lote Twitch (ZIP)</p>
-                            <p className={`text-xs ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>Carpetas con 112px, 56px y 28px</p>
-                        </div>
+                <div className={`mb-4 rounded p-3 space-y-3 ${isDark ? 'bg-[#3d0604] border border-[#7f6000]/30' : 'bg-gray-100'}`}>
+                    <label className="block">
+                        <span className={`mb-1 block text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>Preset</span>
+                        <select
+                            value={exportOptions?.presetId || 'twitch-static-manual'}
+                            onChange={(event) => onExportOptionsChange({ presetId: event.target.value })}
+                            className={`w-full rounded border px-2 py-1.5 text-xs ${isDark ? 'border-[#7f6000]/50 bg-[#3d0604] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}
+                        >
+                            <option value="twitch-static-manual">Twitch manual 112/56/28</option>
+                            <option value="twitch-static-auto">Twitch auto-resize maestro</option>
+                        </select>
                     </label>
+                    <label className="block">
+                        <span className={`mb-1 block text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>Alcance</span>
+                        <select
+                            value={exportOptions?.scope || 'all'}
+                            onChange={(event) => onExportOptionsChange({ scope: event.target.value })}
+                            className={`w-full rounded border px-2 py-1.5 text-xs ${isDark ? 'border-[#7f6000]/50 bg-[#3d0604] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}
+                        >
+                            <option value="active">Activo</option>
+                            <option value="selected">Seleccionados</option>
+                            <option value="all">Todos</option>
+                        </select>
+                    </label>
+                    {exportState?.summary && (
+                        <div className={`rounded border px-2 py-2 text-xs ${exportState.summary.invalidOutputs > 0
+                            ? isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'
+                            : isDark ? 'border-green-500/30 bg-green-500/10 text-green-100' : 'border-green-300 bg-green-50 text-green-800'
+                            }`}
+                        >
+                            Estado: {exportState.status}. Validos: {exportState.summary.validOutputs}/{exportState.summary.totalOutputs}. Invalidos: {exportState.summary.invalidOutputs}.
+                        </div>
+                    )}
+                    {exportState?.progress && (
+                        <div className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
+                            Progreso: {exportState.progress.processedFiles}/{exportState.progress.totalFiles || 0} archivos
+                        </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-1">
+                        <button type="button" className={buttonClass} onClick={onDownloadActivePng} disabled={!activeEmote}>PNG activo</button>
+                        <button type="button" className={buttonClass} onClick={onRetryExport} disabled={isExporting || totalItems === 0}>Reintentar</button>
+                        <button type="button" className={buttonClass} onClick={onCancelExport} disabled={!isExporting}>Cancelar</button>
+                        <button type="button" className={buttonClass} onClick={onDownloadPreparedExport} disabled={!canDownloadPrepared}>Descargar ZIP</button>
+                    </div>
                 </div>
 
                 <ChatSimulator processedImage={processedImage} theme={theme} />
@@ -277,7 +317,7 @@ export default function SidebarRight({
 
             <div className={`p-4 border-t ${isDark ? 'border-[#7f6000]' : 'border-gray-300'}`}>
                 <button
-                    onClick={onExport}
+                    onClick={() => (onPrepareExport || onExport)?.()}
                     disabled={totalItems === 0 || isExporting}
                     className={`w-full py-3 rounded flex items-center justify-center gap-2 font-semibold transition-all ${totalItems > 0 && !isExporting
                         ? (isDark
