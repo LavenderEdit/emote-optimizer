@@ -2,11 +2,13 @@ import React from 'react';
 import { Copy, Download, Eye, EyeOff, Loader2, Scissors, Wand2 } from 'lucide-react';
 import PreviewBox from '../ui/PreviewBox';
 import ChatSimulator from '../ui/ChatSimulator';
+import { formatBytes } from '../../features/performance/memoryStats';
 
 export default function SidebarRight({
     theme,
     activeEmote,
     processedImage,
+    performanceStats,
     onExport,
     isExporting,
     totalItems,
@@ -84,6 +86,29 @@ export default function SidebarRight({
                         <span>112px</span><span>56px</span><span>28px</span>
                     </div>
                 </div>
+
+                {performanceStats && (
+                    <>
+                        <h3 className={`font-semibold mb-3 text-sm uppercase tracking-wider ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
+                            Rendimiento
+                        </h3>
+                        <div className={`mb-6 rounded p-3 text-xs ${isDark ? 'bg-[#3d0604] border border-[#7f6000]/30' : 'bg-gray-100'}`} data-testid="performance-stats">
+                            <div className="grid grid-cols-2 gap-2">
+                                <span>Memoria estimada</span>
+                                <span className="text-right font-mono">{formatBytes(performanceStats.estimatedBytes)}</span>
+                                <span>Previews</span>
+                                <span className="text-right font-mono">{performanceStats.previewCount}</span>
+                                <span>Cache</span>
+                                <span className="text-right font-mono">{performanceStats.cacheEntries} / {Math.round(performanceStats.cacheHitRate * 100)}%</span>
+                            </div>
+                            {performanceStats.warning && (
+                                <div className={`mt-2 rounded border px-2 py-1 ${isDark ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-100' : 'border-yellow-300 bg-yellow-50 text-yellow-800'}`}>
+                                    {performanceStats.warning}
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
 
                 <h3 className={`font-semibold mb-3 text-sm uppercase tracking-wider ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
                     Fondo v2

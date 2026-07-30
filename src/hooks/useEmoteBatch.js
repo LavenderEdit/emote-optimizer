@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { buildEmotesZip, createValidatedEmoteOutput, getOutputRules, getPresetById } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
@@ -8,6 +8,8 @@ import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-i
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
 import { startGridDetection } from '../features/grid-import/gridDetection/runGridDetection';
 import { useProjectPersistence } from '../features/projects/hooks/useProjectPersistence';
+import { createPerformanceSummary } from '../features/performance/memoryStats';
+import { previewCache } from '../features/performance/previewCache';
 import {
     createImageAssetFromFile,
     validateDecodedImageDimensions,
@@ -218,6 +220,12 @@ export function useEmoteBatch() {
     const activeEmote = emotes.find(e => e.id === activeId);
     const activeAsset = activeEmote ? assets[activeEmote.sourceId] : null;
     const activePreviewUrl = activeEmote ? previewUrls[activeEmote.id] : null;
+    const performanceStats = useMemo(() => createPerformanceSummary({
+        assets,
+        emotes,
+        previewUrls,
+        cacheStats: previewCache.stats(),
+    }), [assets, emotes, previewUrls]);
 
     useEffect(() => {
         emotesRef.current = emotes;
@@ -237,6 +245,7 @@ export function useEmoteBatch() {
             previewUrls: previewUrlsRef.current,
             gridDraft: gridDraftRef.current,
         });
+        previewCache.clear();
     }, []);
 
     useEffect(() => {
@@ -267,6 +276,7 @@ export function useEmoteBatch() {
             previewUrls: previewUrlsRef.current,
             gridDraft: gridDraftRef.current,
         });
+        previewCache.clear();
         assetsRef.current = {};
         emotesRef.current = [];
         previewUrlsRef.current = {};
@@ -298,6 +308,7 @@ export function useEmoteBatch() {
             previewUrls: previewUrlsRef.current,
             gridDraft: gridDraftRef.current,
         });
+        previewCache.clear();
         assetsRef.current = project.assets || {};
         emotesRef.current = project.emotes || [];
         previewUrlsRef.current = {};
@@ -1071,6 +1082,7 @@ export function useEmoteBatch() {
         applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
         comparisonMode, setComparisonMode,
         projectPersistence,
+        performanceStats,
         exportOptions, updateExportOptions, exportState, prepareExport, cancelExport, retryExport, downloadPreparedExport, downloadActivePng, clearPreparedExport,
         gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
         isEyedropperActive, setIsEyedropperActive,
