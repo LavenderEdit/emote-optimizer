@@ -54,6 +54,35 @@ describe('buildEmotesZip', () => {
         expect(manifest.items.every((item) => item.outputs[0].width >= 112)).toBe(true);
     });
 
+    it('exports custom PNG outputs without Twitch-only transparency requirements', async () => {
+        const { emotes, assets } = createExportFixture(2);
+        const { zip, manifest } = await buildEmotesZip(emotes, assets, {
+            presetId: 'png-custom',
+            customSize: 320,
+            renderOutput: async (_emote, _asset, outputRule) => ({
+                base64: 'AA==',
+                bytes: 1200,
+                width: outputRule.width,
+                height: outputRule.height,
+                mime: 'image/png',
+                hasTransparency: false,
+                transparentPixelRatio: 0,
+                visiblePixelRatio: 0.5,
+                pngSignatureValid: true,
+            }),
+        });
+        const loaded = await loadZip(zip);
+        const pngFiles = Object.keys(loaded.files).filter((path) => path.endsWith('.png'));
+
+        expect(pngFiles).toEqual([
+            'custom-png/emote_001/emote_001_320.png',
+            'custom-png/emote_002/emote_002_320.png',
+        ]);
+        expect(manifest.preset.id).toBe('png-custom');
+        expect(manifest.summary.validOutputs).toBe(2);
+        expect(manifest.items[0].preflight.transparencyRequired).toBe(false);
+    });
+
     it('keeps manifest, report and ZIP contents aligned', async () => {
         const { emotes, assets } = createExportFixture(3);
         const { zip, manifest, report } = await buildEmotesZip(emotes, assets, {

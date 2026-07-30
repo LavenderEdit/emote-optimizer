@@ -31,3 +31,15 @@
 - Added a browser Canvas encoder E2E test that imports the real export module through Vite and validates generated PNG bytes from the ZIP.
 - Added Cloudflare Pages static deployment config with `dist` output and SPA fallback.
 - Updated release docs, changelog and package version to `1.0.0-beta.1`.
+
+## 2026-07-30 - Grid Pack Studio v1.0 beta.2 phases 8 and 9
+
+- Added versioned project serialization around the existing non-destructive asset/emote/grid model. Source assets keep their Blob data for IndexedDB and `.emoteproject` files; volatile Object URLs are recreated during restore.
+- Added native IndexedDB storage with an in-memory fallback for tests and unsupported environments. Autosave runs only when the editor is stable, and recovery is loaded after mount to avoid synchronous state effects.
+- Added project manager UI for autosave status, save as, open, rename, duplicate, delete, import and export. Playwright now verifies that the real reference grid can be generated, autosaved, reloaded and recovered.
+- Added an LRU preview cache keyed by source id, crop, fit, background, adjustments, outline and comparison mode. Cache-owned Blob URLs are revoked on eviction and project cleanup.
+- Replaced the bottom emote strip with a virtualized strip so large packs do not mount every thumbnail at once.
+- Added image metrics Worker support for histograms and projection profiles, plus a Sidebar performance summary for estimated memory, previews and cache hit rate.
+- Added `npm run bench:performance` to record baseline timings for 994x1001 metrics and 100-cell cache operations.
+- Added active histogram display, levels controls, non-destructive variants, a custom PNG preset, optional contact sheet ZIP output and basic drop shadow styling.
+- Deliberate beta.2 scope decision: animated GIF/WebP decoding/encoding and ML background-removal adapters remain documented limitations instead of partially wired features.

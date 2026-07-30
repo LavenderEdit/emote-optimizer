@@ -626,6 +626,29 @@ describe('useEmoteBatch', () => {
         expect(anchor.download).toMatch(/_master\.png$/);
     });
 
+    it('downloads the active custom PNG at the configured size', async () => {
+        const { click, anchor } = mockAnchorDownload();
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        await act(async () => {
+            result.current.updateExportOptions({ presetId: 'png-custom', customSize: 320 });
+        });
+        await act(async () => {
+            await result.current.downloadActivePng();
+        });
+
+        expect(exportUtilsMock.createValidatedEmoteOutput).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.any(Object),
+            expect.objectContaining({ id: 'png-custom' }),
+            expect.objectContaining({ width: 320, height: 320 }),
+            expect.any(String),
+        );
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(anchor.download).toMatch(/_320\.png$/);
+    });
+
     it('does not download the active PNG when validation fails', async () => {
         const { click } = mockAnchorDownload();
         exportUtilsMock.createValidatedEmoteOutput.mockResolvedValueOnce({
@@ -646,6 +669,25 @@ describe('useEmoteBatch', () => {
         expect(click).not.toHaveBeenCalled();
         expect(result.current.exportState.status).toBe('invalid');
         expect(result.current.exportState.error).toBe('La salida debe conservar transparencia real.');
+    });
+
+    it('creates a selected non-destructive variant from the active emote', async () => {
+        const { result } = renderHook(() => useEmoteBatch());
+
+        await createGridDocuments(result);
+        const base = result.current.activeEmote;
+
+        await act(async () => {
+            result.current.createVariantFromActive('variant');
+        });
+
+        const variant = result.current.activeEmote;
+        expect(result.current.emotes).toHaveLength(26);
+        expect(variant.id).not.toBe(base.id);
+        expect(variant.variantOf).toBe(base.id);
+        expect(variant.sourceId).toBe(base.sourceId);
+        expect(variant.cropRect).toEqual(base.cropRect);
+        expect(result.current.selectedEmoteIds).toEqual([variant.id]);
     });
 });
 

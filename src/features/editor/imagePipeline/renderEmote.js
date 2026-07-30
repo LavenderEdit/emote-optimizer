@@ -154,11 +154,56 @@ export function applyDocumentOperations(canvas, emote, options = {}) {
         applyProAdjustments(data, canvas.width, canvas.height, emote.adjustments);
     }
 
+    if (emote.outline?.shadow?.enabled) {
+        applyDropShadow(data, canvas.width, canvas.height, emote.outline.shadow);
+    }
+
     if (emote.outline?.enabled || emote.isAutoOutlineActive) {
         applyAutoOutline(data, canvas.width, canvas.height, emote.outline?.size || 3, emote.outline?.color || [255, 255, 255]);
     }
 
     context.putImageData(imageData, 0, 0);
+}
+
+export function applyDropShadow(data, width, height, shadow = {}) {
+    const source = new Uint8ClampedArray(data);
+    const blur = Math.max(0, Math.min(8, Math.round(shadow.blur ?? 2)));
+    const offsetX = Math.round(shadow.offsetX ?? 2);
+    const offsetY = Math.round(shadow.offsetY ?? 2);
+    const opacity = Math.max(0, Math.min(1, shadow.opacity ?? 0.35));
+    const color = shadow.color || [0, 0, 0];
+    const radius = blur + 1;
+    const shadowAlpha = new Uint8ClampedArray(width * height);
+
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            const sourceOffset = (y * width + x) * 4;
+            const alpha = source[sourceOffset + 3];
+            if (alpha <= 16) continue;
+
+            for (let dy = -blur; dy <= blur; dy += 1) {
+                for (let dx = -blur; dx <= blur; dx += 1) {
+                    const targetX = x + offsetX + dx;
+                    const targetY = y + offsetY + dy;
+                    if (targetX < 0 || targetX >= width || targetY < 0 || targetY >= height) continue;
+                    const distance = Math.hypot(dx, dy);
+                    if (distance > radius) continue;
+                    const falloff = blur === 0 ? 1 : Math.max(0, 1 - distance / radius);
+                    const targetIndex = targetY * width + targetX;
+                    shadowAlpha[targetIndex] = Math.max(shadowAlpha[targetIndex], alpha * opacity * falloff);
+                }
+            }
+        }
+    }
+
+    for (let index = 0; index < width * height; index += 1) {
+        const offset = index * 4;
+        if (source[offset + 3] >= 245 || shadowAlpha[index] <= source[offset + 3]) continue;
+        data[offset] = color[0];
+        data[offset + 1] = color[1];
+        data[offset + 2] = color[2];
+        data[offset + 3] = shadowAlpha[index];
+    }
 }
 
 export function isBackgroundRemovalV2(emote) {

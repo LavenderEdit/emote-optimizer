@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { twitchStaticAuto, twitchStaticManual } from '../features/export/presets';
+import { pngCustom, twitchStaticAuto, twitchStaticManual } from '../features/export/presets';
 import { validateTwitchOutput } from '../features/export/validators/validateTwitchOutput';
 import { sanitizeName, uniqueSafeName } from '../shared/files/names';
 import { canvasToBlob, renderEmoteOutputCanvas } from '../features/editor/imagePipeline/renderEmote';
@@ -7,6 +7,7 @@ import { canvasToBlob, renderEmoteOutputCanvas } from '../features/editor/imageP
 const PRESETS = {
     [twitchStaticManual.id]: twitchStaticManual,
     [twitchStaticAuto.id]: twitchStaticAuto,
+    [pngCustom.id]: pngCustom,
 };
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -107,7 +108,9 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
     const renderOutput = options.renderOutput;
     const now = options.now || (() => new Date().toISOString());
     const signal = options.signal;
-    const packageRoot = preset.id === twitchStaticAuto.id ? 'twitch-auto-resize' : 'twitch-manual';
+    const packageRoot = preset.id === twitchStaticAuto.id
+        ? 'twitch-auto-resize'
+        : preset.id === twitchStaticManual.id ? 'twitch-manual' : 'custom-png';
     const manifest = {
         app: 'EmoteStudio Pro',
         exportedAt: now(),
@@ -126,7 +129,7 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
         items: [],
     };
     const duplicateNames = findDuplicateNames(emotes);
-    const totalFiles = emotes.reduce((sum, emote) => sum + getOutputRules(preset, emote, assets[emote.sourceId]).length, 0);
+    const totalFiles = emotes.reduce((sum, emote) => sum + getOutputRules(preset, emote, assets[emote.sourceId], options).length, 0);
     let processedFiles = 0;
 
     throwIfAborted(signal);
@@ -137,8 +140,8 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
         const emote = emotes[i];
         const asset = assets[emote.sourceId];
         const safeName = uniqueSafeName(emote.name, usedNames, `emote_${i + 1}`);
-        const item = createManifestItem(emote, asset, safeName, duplicateNames);
-        const outputRules = getOutputRules(preset, emote, asset);
+        const item = createManifestItem(emote, asset, safeName, duplicateNames, preset);
+        const outputRules = getOutputRules(preset, emote, asset, options);
 
         options.onProgress?.({
             status: 'processing',
@@ -216,6 +219,20 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
     report.summary = manifest.summary;
     report.status = report.summary.invalidItems > 0 ? 'invalid' : 'valid';
 
+    if (options.includeContactSheet && manifest.summary.validOutputs > 0) {
+        const contactSheet = await createContactSheet(emotes, assets, {
+            size: options.contactSheetSize || 112,
+            columns: options.contactSheetColumns || 6,
+        });
+        zip.file('contact-sheet.png', contactSheet.base64, { base64: true });
+        manifest.contactSheet = {
+            path: 'contact-sheet.png',
+            width: contactSheet.width,
+            height: contactSheet.height,
+            bytes: contactSheet.bytes,
+        };
+    }
+
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
     zip.file('export-report.json', JSON.stringify(report, null, 2));
     zip.file('export-report.html', createReportHtml(report));
@@ -229,6 +246,38 @@ export async function buildEmotesZip(emotes, assets, options = {}) {
     });
 
     return { zip, manifest, report };
+}
+
+export async function createContactSheet(emotes, assets, options = {}) {
+    const size = options.size || 112;
+    const columns = Math.max(1, options.columns || 6);
+    const rows = Math.max(1, Math.ceil(emotes.length / columns));
+    const canvas = document.createElement('canvas');
+    canvas.width = columns * size;
+    canvas.height = rows * size;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+
+    for (let index = 0; index < emotes.length; index += 1) {
+        const emote = emotes[index];
+        const asset = assets[emote.sourceId];
+        if (!asset) continue;
+        const tile = await renderEmoteOutputCanvas(emote, asset, size);
+        const x = (index % columns) * size;
+        const y = Math.floor(index / columns) * size;
+        context.drawImage(tile, x, y);
+    }
+
+    const blob = await canvasToBlob(canvas);
+    return {
+        blob,
+        base64: await blobToBase64(blob),
+        bytes: blob.size,
+        width: canvas.width,
+        height: canvas.height,
+    };
 }
 
 export const generateEmotesZip = async (emotes, assets, setIsExporting, options = {}) => {
@@ -260,12 +309,23 @@ export function getPresetById(presetId) {
     return resolvePreset(presetId);
 }
 
-export function getOutputRules(preset, emote, asset) {
+export function getOutputRules(preset, emote, asset, options = {}) {
     if (preset.id === twitchStaticManual.id) {
         return preset.outputs.map((output) => ({
             ...output,
             suffix: String(output.width),
         }));
+    }
+
+    if (preset.id === pngCustom.id) {
+        const size = Math.max(1, Math.min(4096, Math.round(options.customSize || options.width || preset.outputs[0].width)));
+        return [{
+            ...preset.outputs[0],
+            width: size,
+            height: Math.max(1, Math.min(4096, Math.round(options.customHeight || options.height || size))),
+            maxBytes: options.customMaxBytes || preset.outputs[0].maxBytes,
+            suffix: `${size}`,
+        }];
     }
 
     const crop = emote.cropRect || { width: asset?.width || 112, height: asset?.height || 112 };
@@ -288,7 +348,7 @@ function resolvePreset(presetId) {
     return PRESETS[presetId] || twitchStaticManual;
 }
 
-function createManifestItem(emote, asset, safeName, duplicateNames) {
+function createManifestItem(emote, asset, safeName, duplicateNames, preset) {
     const duplicateName = duplicateNames.has(sanitizeName(emote.name));
     return {
         id: emote.id,
@@ -316,8 +376,8 @@ function createManifestItem(emote, asset, safeName, duplicateNames) {
             name: safeName,
             duplicateName,
             pngRequired: true,
-            squareRequired: true,
-            transparencyRequired: true,
+            squareRequired: Boolean(preset.square),
+            transparencyRequired: Boolean(preset.transparentBackground),
         },
         outputs: [],
         errors: [],

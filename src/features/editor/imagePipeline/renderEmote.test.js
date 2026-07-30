@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createOutputPlacement } from './renderEmote';
+import { applyDropShadow, createOutputPlacement } from './renderEmote';
 
 describe('createOutputPlacement', () => {
     it('contains rectangular crops without deformation', () => {
@@ -50,5 +50,28 @@ describe('createOutputPlacement', () => {
         expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(0.04);
         expect(Math.max(...centerY) - Math.min(...centerY)).toBeLessThan(0.04);
         expect(Math.max(...widthRatio) - Math.min(...widthRatio)).toBeLessThan(0.04);
+    });
+
+    it('adds a drop shadow behind visible pixels without replacing opaque content', () => {
+        const data = new Uint8ClampedArray(3 * 3 * 4);
+        const center = (1 * 3 + 1) * 4;
+        data[center] = 255;
+        data[center + 1] = 0;
+        data[center + 2] = 0;
+        data[center + 3] = 255;
+
+        applyDropShadow(data, 3, 3, {
+            enabled: true,
+            offsetX: 1,
+            offsetY: 0,
+            blur: 0,
+            opacity: 0.5,
+            color: [0, 0, 0],
+        });
+
+        const shadow = (1 * 3 + 2) * 4;
+        expect(Array.from(data.slice(center, center + 4))).toEqual([255, 0, 0, 255]);
+        expect(data[shadow + 3]).toBeGreaterThan(0);
+        expect(Array.from(data.slice(shadow, shadow + 3))).toEqual([0, 0, 0]);
     });
 });

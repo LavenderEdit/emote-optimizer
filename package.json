@@ -1,7 +1,7 @@
 {
   "name": "emote-optimizer",
   "private": true,
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "bench:performance": "node scripts/performance-benchmark.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",

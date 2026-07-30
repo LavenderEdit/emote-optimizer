@@ -39,6 +39,19 @@ test('reference grid exports 24 valid Twitch auto-resize master PNGs', async ({ 
     });
 });
 
+test('reference grid autosaves and recovers the generated pack after reload', async ({ page }) => {
+    await prepareReferenceGridPack(page, { applyBackground: false });
+
+    await page.getByTestId('project-manager-toggle').click();
+    await expect(page.getByText(/24 emotes/)).toBeVisible({ timeout: 20_000 });
+    await page.reload();
+
+    await expect(page.getByTestId('recovery-dialog')).toContainText('Proyecto recuperable', { timeout: 20_000 });
+    await page.getByRole('button', { name: 'Recuperar' }).click();
+    await expect(page.getByTestId('prepare-export')).toContainText('Exportar 24 Emotes', { timeout: 20_000 });
+    await expect(page.getByTestId('grid-active-count')).toContainText('24 activos');
+});
+
 test('real browser Canvas encoder produces valid transparent Twitch PNGs', async ({ page }) => {
     await page.goto('/');
     const payload = await page.evaluate(async () => {
@@ -97,7 +110,7 @@ test('real browser Canvas encoder produces valid transparent Twitch PNGs', async
     });
 });
 
-async function prepareReferenceGridPack(page) {
+async function prepareReferenceGridPack(page, { applyBackground = true } = {}) {
     await page.goto('/');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -113,6 +126,8 @@ async function prepareReferenceGridPack(page) {
 
     await page.getByTestId('generate-grid-emotes').click();
     await expect(page.getByTestId('prepare-export')).toContainText('Exportar 24 Emotes', { timeout: 30_000 });
+
+    if (!applyBackground) return;
 
     await page.getByTestId('background-v2-all').click();
     await expect(page.getByText(/% removido/)).toBeVisible({ timeout: 60_000 });

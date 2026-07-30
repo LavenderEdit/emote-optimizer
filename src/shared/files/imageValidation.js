@@ -81,6 +81,7 @@ export async function createImageAssetFromFile(file) {
             name: file.name.replace(/\.[^/.]+$/, ''),
             mimeType: file.type,
             bytes: file.size,
+            blob: file,
             objectUrl,
             width: dimensions.width,
             height: dimensions.height,

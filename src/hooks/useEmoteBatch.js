@@ -1,12 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { buildEmotesZip, createValidatedEmoteOutput, getOutputRules, getPresetById } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
+import { createEmoteVariant } from '../features/editor/model/variants';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
 import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
 import { startGridDetection } from '../features/grid-import/gridDetection/runGridDetection';
+import { useProjectPersistence } from '../features/projects/hooks/useProjectPersistence';
+import { createPerformanceSummary } from '../features/performance/memoryStats';
+import { previewCache } from '../features/performance/previewCache';
 import {
     createImageAssetFromFile,
     validateDecodedImageDimensions,
@@ -15,6 +19,7 @@ import {
 import { sanitizeName } from '../shared/files/names';
 
 const ACTIVE_EXPORT_STATUSES = new Set(['pending', 'processing', 'compressing']);
+const APP_VERSION = '1.0.0-beta.2';
 
 function formatValidationMessages(messages) {
     return messages.filter(Boolean).join('\n');
@@ -188,10 +193,13 @@ export function useEmoteBatch() {
     const [selectedEmoteIds, setSelectedEmoteIds] = useState([]);
     const [settingsClipboard, setSettingsClipboard] = useState(null);
     const [comparisonMode, setComparisonMode] = useState('after');
+    const [activeMetrics, setActiveMetrics] = useState(null);
     const [exportOptions, setExportOptions] = useState({
         presetId: 'twitch-static-manual',
         scope: 'all',
         activeOutputSize: 112,
+        customSize: 512,
+        includeContactSheet: false,
     });
     const [exportState, setExportState] = useState({
         status: 'idle',
@@ -216,6 +224,13 @@ export function useEmoteBatch() {
     const activeEmote = emotes.find(e => e.id === activeId);
     const activeAsset = activeEmote ? assets[activeEmote.sourceId] : null;
     const activePreviewUrl = activeEmote ? previewUrls[activeEmote.id] : null;
+    const visibleActiveMetrics = activeMetrics?.emoteId === activeId ? activeMetrics.metrics : null;
+    const performanceStats = useMemo(() => createPerformanceSummary({
+        assets,
+        emotes,
+        previewUrls,
+        cacheStats: previewCache.stats(),
+    }), [assets, emotes, previewUrls]);
 
     useEffect(() => {
         emotesRef.current = emotes;
@@ -235,6 +250,7 @@ export function useEmoteBatch() {
             previewUrls: previewUrlsRef.current,
             gridDraft: gridDraftRef.current,
         });
+        previewCache.clear();
     }, []);
 
     useEffect(() => {
@@ -244,6 +260,95 @@ export function useEmoteBatch() {
             return next.length === current.length ? current : next;
         });
     }, [emotes]);
+
+    const getProjectSnapshot = useCallback(() => ({
+        appVersion: APP_VERSION,
+        theme,
+        assets: assetsRef.current,
+        emotes: emotesRef.current,
+        gridDraft: gridDraftRef.current,
+        activeId,
+        selectedEmoteIds,
+        exportOptions,
+        settingsClipboard,
+    }), [activeId, exportOptions, selectedEmoteIds, settingsClipboard, theme]);
+
+    const clearProjectSnapshot = useCallback(() => {
+        detectionRef.current?.cancel?.();
+        exportAbortRef.current?.abort();
+        releaseAllResources({
+            assets: assetsRef.current,
+            previewUrls: previewUrlsRef.current,
+            gridDraft: gridDraftRef.current,
+        });
+        previewCache.clear();
+        assetsRef.current = {};
+        emotesRef.current = [];
+        previewUrlsRef.current = {};
+        gridDraftRef.current = null;
+        setAssets({});
+        setEmotes([]);
+        setPreviewUrls({});
+        setActiveMetrics(null);
+        setGridDraft(null);
+        setActiveId(null);
+        setSelectedEmoteIds([]);
+        setSettingsClipboard(null);
+        setIsEyedropperActive(false);
+        setExportState({
+            status: 'idle',
+            runId: null,
+            progress: null,
+            summary: null,
+            manifest: null,
+            report: null,
+            downloadUrl: null,
+            fileName: null,
+            error: null,
+        });
+    }, []);
+
+    const restoreProjectSnapshot = useCallback((project) => {
+        releaseAllResources({
+            assets: assetsRef.current,
+            previewUrls: previewUrlsRef.current,
+            gridDraft: gridDraftRef.current,
+        });
+        previewCache.clear();
+        assetsRef.current = project.assets || {};
+        emotesRef.current = project.emotes || [];
+        previewUrlsRef.current = {};
+        gridDraftRef.current = project.gridDraft || null;
+        setTheme(project.theme || 'dark');
+        setAssets(project.assets || {});
+        setEmotes(project.emotes || []);
+        setPreviewUrls({});
+        setActiveMetrics(null);
+        setGridDraft(project.gridDraft || null);
+        setActiveId(project.activeId || project.emotes?.[0]?.id || null);
+        setSelectedEmoteIds(project.selectedEmoteIds || []);
+        setExportOptions((current) => ({ ...current, ...(project.exportOptions || {}) }));
+        setSettingsClipboard(project.settingsClipboard || null);
+        setIsEyedropperActive(false);
+    }, []);
+
+    const projectPersistence = useProjectPersistence({
+        getSnapshot: getProjectSnapshot,
+        restoreSnapshot: restoreProjectSnapshot,
+        clearSnapshot: clearProjectSnapshot,
+        dirtyKey: JSON.stringify({
+            emotes: emotes.map((emote) => [emote.id, emote.name, emote.cropRect, emote.fitMode, emote.padding, emote.frame, emote.backgroundRemoval, emote.adjustments, emote.outline, emote.variants]),
+            assets: Object.keys(assets),
+            gridDraftId: gridDraft?.id,
+            gridCells: gridDraft?.cells?.map((cell) => [cell.id, cell.enabled, cell.empty, cell.name, cell.sourceRect, cell.contentRect]),
+            activeId,
+            selectedEmoteIds,
+            exportOptions,
+        }),
+        hasContent: emotes.length > 0 || Boolean(gridDraft),
+        isStable: !isGeneratingGrid && !isDetectingGrid && !isExporting && !isTrimmingBatch && !isApplyingBackgroundV2,
+        appVersion: APP_VERSION,
+    });
 
     const getTargetEmoteIds = useCallback(() => {
         return selectedEmoteIds.length > 0
@@ -329,6 +434,19 @@ export function useEmoteBatch() {
         )));
         clearPreviewsForIds(selectedEmoteIds);
     }, [activeEmote, clearPreviewsForIds, selectedEmoteIds]);
+
+    const createVariantFromActive = useCallback((label = 'variant') => {
+        if (!activeId) return null;
+        const baseEmote = emotesRef.current.find((emote) => emote.id === activeId);
+        if (!baseEmote) return null;
+        const createdVariant = createEmoteVariant(baseEmote, emotesRef.current, label);
+        const nextEmotes = [...emotesRef.current, createdVariant];
+        emotesRef.current = nextEmotes;
+        setEmotes(nextEmotes);
+        setActiveId(createdVariant.id);
+        setSelectedEmoteIds([createdVariant.id]);
+        return createdVariant;
+    }, [activeId]);
 
     const updateBackgroundRemovalV2Params = useCallback((updates) => {
         updateSelectedOrActiveEmotes((emote) => ({
@@ -508,6 +626,11 @@ export function useEmoteBatch() {
         });
     }, []);
 
+    const updateActiveMetrics = useCallback((emoteId, metrics) => {
+        if (emoteId !== activeId) return;
+        setActiveMetrics({ emoteId, metrics });
+    }, [activeId]);
+
     const updateGridDraft = useCallback((updater) => {
         setGridDraft((current) => {
             if (!current) return current;
@@ -600,6 +723,7 @@ export function useEmoteBatch() {
         });
         setSelectedEmoteIds((currentSelection) => currentSelection.filter((id) => id !== current?.id));
         setActiveId(next[0]?.id || null);
+        setActiveMetrics(null);
         setIsEyedropperActive(false);
     };
 
@@ -872,7 +996,7 @@ export function useEmoteBatch() {
     const downloadActivePng = useCallback(async () => {
         if (!activeEmote || !activeAsset) return;
         const preset = getPresetById(exportOptions.presetId);
-        const outputRules = getOutputRules(preset, activeEmote, activeAsset);
+        const outputRules = getOutputRules(preset, activeEmote, activeAsset, exportOptions);
         const outputRule = preset.id === 'twitch-static-manual'
             ? outputRules.find((rule) => rule.width === exportOptions.activeOutputSize) || outputRules[0]
             : outputRules[0];
@@ -967,7 +1091,7 @@ export function useEmoteBatch() {
             error: null,
         });
         return { encoded, validation };
-    }, [activeAsset, activeEmote, exportOptions.activeOutputSize, exportOptions.presetId]);
+    }, [activeAsset, activeEmote, exportOptions]);
 
     const exportToZip = prepareExport;
 
@@ -978,11 +1102,13 @@ export function useEmoteBatch() {
         assets,
         activeId, setActiveId,
         selectedEmoteIds, toggleEmoteSelection, selectAllEmotes, selectNoEmotes, invertEmoteSelection, selectWarningEmotes,
-        activeEmote, activeAsset, activePreviewUrl, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview,
-        copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, settingsClipboard,
+        activeEmote, activeAsset, activePreviewUrl, activeMetrics: visibleActiveMetrics, updateActiveEmote, updateSelectedOrActiveEmotes, updateActivePreview, updateActiveMetrics,
+        copyActiveSettings, pasteSettingsToSelected, applyActiveSettingsToSelected, createVariantFromActive, settingsClipboard,
         trimSelectedEmotes, isTrimmingBatch,
         applyBackgroundRemovalV2, updateBackgroundRemovalV2Params, resetBackgroundRemovalV2, removeBackgroundRemovalV2, applyBackgroundRemovalV2Params, isApplyingBackgroundV2,
         comparisonMode, setComparisonMode,
+        projectPersistence,
+        performanceStats,
         exportOptions, updateExportOptions, exportState, prepareExport, cancelExport, retryExport, downloadPreparedExport, downloadActivePng, clearPreparedExport,
         gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, detectGridAutomatically, isGeneratingGrid, isDetectingGrid,
         isEyedropperActive, setIsEyedropperActive,
