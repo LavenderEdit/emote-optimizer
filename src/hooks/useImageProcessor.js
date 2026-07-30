@@ -1,66 +1,50 @@
 import { useEffect, useRef } from 'react';
-import { applyFloodFillErasure } from '../utils/imageProcessing/floodFill';
-import { applyRestoreBrush } from '../utils/imageProcessing/restoreBrush';
-import { applyProAdjustments } from '../utils/imageProcessing/adjustments';
-import { applyAutoOutline } from '../utils/imageProcessing/autoOutline';
+import { renderEmoteMasterCanvas, canvasToBlob } from '../features/editor/imagePipeline/renderEmote';
 
 export function useImageProcessor({
-    imageSrc,
-    erasurePoints,
-    restorePoints,
-    tolerance,
-    isAutoOutlineActive,
-    adjustments,
-    onProcessed
+    emote,
+    asset,
+    onPreviewReady,
+    comparisonMode = 'after',
 }) {
     const canvasRef = useRef(null);
 
     useEffect(() => {
-        if (!imageSrc || !canvasRef.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const img = new Image();
+        let cancelled = false;
 
-        img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        async function render() {
+            if (!emote || !asset || !canvasRef.current) return;
+            const renderedCanvas = await renderEmoteMasterCanvas(emote, asset, {
+                applyOperations: comparisonMode !== 'before',
+                maskOnly: comparisonMode === 'mask',
+            });
+            if (!renderedCanvas || cancelled || !canvasRef.current) return;
 
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0);
+            const canvas = canvasRef.current;
+            canvas.width = renderedCanvas.width;
+            canvas.height = renderedCanvas.height;
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(renderedCanvas, 0, 0);
 
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            const w = canvas.width;
-            const h = canvas.height;
-
-            if (erasurePoints && erasurePoints.length > 0) {
-                const refinedMask = applyFloodFillErasure(data, w, h, erasurePoints, tolerance);
-
-                if (restorePoints && restorePoints.length > 0) {
-                    applyRestoreBrush(refinedMask, w, h, restorePoints, 10);
-                }
-
-                for (let i = 0; i < w * h; i++) {
-                    data[i * 4 + 3] = Math.min(data[i * 4 + 3], refinedMask[i]);
+            if (onPreviewReady && comparisonMode === 'after') {
+                try {
+                    const blob = await canvasToBlob(canvas);
+                    if (!cancelled) onPreviewReady(emote.id, blob);
+                } catch (error) {
+                    console.error('No se pudo crear preview del emote:', error);
                 }
             }
+        }
 
-            if (adjustments) {
-                applyProAdjustments(data, w, h, adjustments);
-            }
+        render().catch((error) => {
+            if (!cancelled) console.error('No se pudo renderizar el emote:', error);
+        });
 
-            if (isAutoOutlineActive) {
-                applyAutoOutline(data, w, h, 3, [255, 255, 255]);
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-            if (onProcessed) onProcessed(canvas.toDataURL('image/png'));
+        return () => {
+            cancelled = true;
         };
-
-        img.src = imageSrc;
-    }, [imageSrc, erasurePoints, restorePoints, tolerance, isAutoOutlineActive, adjustments, onProcessed]);
+    }, [emote, asset, onPreviewReady, comparisonMode]);
 
     return { canvasRef };
 }

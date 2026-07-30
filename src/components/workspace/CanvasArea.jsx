@@ -5,29 +5,38 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import { useCanvasInteraction } from '../../hooks/useCanvasInteraction';
 import EmptyDropzone from './EmptyDropzone';
 import ActiveCanvas from './ActiveCanvas';
+import GridImportWorkspace from '../../features/grid-import/components/GridImportWorkspace';
 
 export default function CanvasArea({
     theme,
-    imageSrc,
+    emote,
+    asset,
     onImageRemove,
     onUploadClick,
+    onGridUploadClick,
     onFileDrop,
+    gridDraft,
+    onGridDraftChange,
+    onGridGenerate,
+    onGridAutoDetect,
+    onGridCancel,
+    isGeneratingGrid,
+    isDetectingGrid,
+    comparisonMode,
     isEyedropperActive,
-    tolerance,
-    isAutoOutlineActive,
-    adjustments,
-    onProcessed,
-    erasurePoints,
     setErasurePoints,
-    restorePoints,
     setRestorePoints,
+    onPreviewReady,
     saveToHistory
 }) {
     const isDark = theme === 'dark';
     const currentStyles = isDark ? THEME_STYLES.dark : THEME_STYLES.light;
 
     const { canvasRef } = useImageProcessor({
-        imageSrc, erasurePoints, restorePoints, tolerance, isAutoOutlineActive, adjustments, onProcessed
+        emote,
+        asset,
+        onPreviewReady,
+        comparisonMode,
     });
 
     const { isDragging, dragHandlers } = useDragAndDrop(onFileDrop);
@@ -43,10 +52,22 @@ export default function CanvasArea({
             className={`flex-1 relative flex items-center justify-center p-8 transition-all duration-200 ${dragBgClass}`}
             {...dragHandlers}
         >
-            {!imageSrc ? (
+            {gridDraft ? (
+                <GridImportWorkspace
+                    draft={gridDraft}
+                    theme={theme}
+                    onDraftChange={onGridDraftChange}
+                    onGenerate={onGridGenerate}
+                    onAutoDetect={onGridAutoDetect}
+                    onCancel={onGridCancel}
+                    isGenerating={isGeneratingGrid}
+                    isDetecting={isDetectingGrid}
+                />
+            ) : !emote || !asset ? (
                 <EmptyDropzone
                     currentStyles={currentStyles}
                     onUploadClick={onUploadClick}
+                    onGridUploadClick={onGridUploadClick}
                 />
             ) : (
                 <ActiveCanvas
