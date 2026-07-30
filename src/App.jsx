@@ -13,6 +13,7 @@ function App() {
     emotes,
     activeId, setActiveId,
     activeEmote, updateActiveEmote,
+    gridDraft, updateGridDraft, closeGridDraft, generateGridEmotes, isGeneratingGrid,
     isEyedropperActive, setIsEyedropperActive,
     isExporting,
     processFiles, handleFileInput, triggerUpload,
@@ -40,7 +41,8 @@ function App() {
         <SidebarLeft
           theme={theme}
           hasImage={!!activeEmote}
-          onUploadClick={triggerUpload}
+          onUploadClick={() => triggerUpload('individual')}
+          onGridUploadClick={() => triggerUpload('grid')}
           isEyedropperActive={isEyedropperActive}
           onEyedropperToggle={() => setIsEyedropperActive(!isEyedropperActive)}
           tolerance={activeEmote?.tolerance || 30}
@@ -56,8 +58,14 @@ function App() {
             theme={theme}
             imageSrc={activeEmote?.originalSrc || null}
             onImageRemove={handleRemoveActive}
-            onUploadClick={triggerUpload}
+            onUploadClick={() => triggerUpload('individual')}
+            onGridUploadClick={() => triggerUpload('grid')}
             onFileDrop={(file) => processFiles([file])}
+            gridDraft={gridDraft}
+            onGridDraftChange={updateGridDraft}
+            onGridGenerate={generateGridEmotes}
+            onGridCancel={closeGridDraft}
+            isGeneratingGrid={isGeneratingGrid}
             isEyedropperActive={isEyedropperActive}
             tolerance={activeEmote?.tolerance || 30}
             isAutoOutlineActive={activeEmote?.isAutoOutlineActive || false}

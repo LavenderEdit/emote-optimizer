@@ -208,3 +208,24 @@ npm run lint      # Analiza el código con ESLint
 ## 🧑‍💻 Autor
 
 Juan S. Pimentel Lalangui
+
+---
+
+## Implementado ahora
+
+Comandos nuevos:
+
+```bash
+npm run test
+npm run test:watch
+npm run test:coverage
+```
+
+Flujo manual de grid:
+
+- Usa `Paquete en grid` para cargar una sola imagen compuesta.
+- Ajusta filas, columnas, margenes, gutters e inset desde el panel lateral.
+- Arrastra las guias del overlay para corregir limites antes de recortar.
+- Haz clic en una celda o usa la lista de revision para activarla, omitirla o marcarla como vacia.
+- `Generar recortes` crea emotes independientes desde las celdas activas sin estirar contenido rectangular.
+- La exportacion Twitch manual usa un canvas cuadrado transparente con encuadre `contain` y escribe `manifest.json` y `export-report.json` dentro del ZIP.
