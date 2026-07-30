@@ -1,7 +1,7 @@
 import { analyzeGridImageData } from '../gridDetection/analyzeGrid';
 
 self.onmessage = (event) => {
-    const { id, imageData } = event.data;
+    const { requestId, sourceId, imageData } = event.data;
 
     try {
         const data = new Uint8ClampedArray(imageData.data);
@@ -10,10 +10,11 @@ self.onmessage = (event) => {
             width: imageData.width,
             height: imageData.height,
         });
-        self.postMessage({ id, ok: true, analysis });
+        self.postMessage({ requestId, sourceId, ok: true, analysis });
     } catch (error) {
         self.postMessage({
-            id,
+            requestId,
+            sourceId,
             ok: false,
             error: error.message || 'No se pudo analizar el grid.',
         });

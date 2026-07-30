@@ -41,9 +41,26 @@ export function createEmoteDocumentFromAsset(asset) {
     };
 }
 
-export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey }) {
+export function getGridCellDocumentId(sourceId, cellId) {
+    return `grid:${sourceId}:${cellId}`;
+}
+
+export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey, previousDocument = null }) {
+    const preserved = previousDocument ? {
+        fitMode: previousDocument.fitMode,
+        padding: previousDocument.padding,
+        backgroundRemoval: previousDocument.backgroundRemoval,
+        adjustments: previousDocument.adjustments,
+        outline: previousDocument.outline,
+        erasurePoints: previousDocument.erasurePoints,
+        restorePoints: previousDocument.restorePoints,
+        history: previousDocument.history,
+        tolerance: previousDocument.tolerance,
+        isAutoOutlineActive: previousDocument.isAutoOutlineActive,
+    } : {};
+
     return {
-        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        id: previousDocument?.id || getGridCellDocumentId(gridAsset.id, cell.id),
         documentType: 'grid-cell',
         name: sanitizeName(cell.name, `emote_${cell.row + 1}_${cell.column + 1}`),
         sourceId: gridAsset.id,
@@ -59,16 +76,16 @@ export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey
         },
         cropRect: cell.contentRect,
         generationKey,
-        fitMode: 'contain',
-        padding: 0,
-        backgroundRemoval: {
+        fitMode: preserved.fitMode || 'contain',
+        padding: preserved.padding ?? 0,
+        backgroundRemoval: preserved.backgroundRemoval || {
             mode: 'manual-flood-fill',
             tolerance: 30,
             erasurePoints: [],
             restorePoints: [],
         },
-        adjustments: { ...DEFAULT_ADJUSTMENTS },
-        outline: {
+        adjustments: preserved.adjustments || { ...DEFAULT_ADJUSTMENTS },
+        outline: preserved.outline || {
             enabled: false,
             size: 3,
             color: [255, 255, 255],
@@ -77,11 +94,11 @@ export function createEmoteDocumentFromGridCell({ gridAsset, cell, generationKey
             errors: [],
             warnings: cell.warnings || (cell.empty ? ['Celda marcada como vacia.'] : []),
         },
-        erasurePoints: [],
-        restorePoints: [],
-        history: [],
-        tolerance: 30,
-        isAutoOutlineActive: false,
+        erasurePoints: preserved.erasurePoints || [],
+        restorePoints: preserved.restorePoints || [],
+        history: preserved.history || [],
+        tolerance: preserved.tolerance ?? 30,
+        isAutoOutlineActive: preserved.isAutoOutlineActive || false,
     };
 }
 

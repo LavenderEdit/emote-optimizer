@@ -31,41 +31,83 @@ export async function createAnalysisImageData(asset, maxSide = 1400) {
 }
 
 export async function detectGridInWorker(asset) {
-    const { imageData, scaleX, scaleY } = await createAnalysisImageData(asset);
+    return startGridDetection(asset).promise;
+}
 
-    if (typeof Worker === 'undefined') {
-        return scaleAnalysis(analyzeGridImageData({
-            data: imageData.data,
-            width: imageData.width,
-            height: imageData.height,
-        }), scaleX, scaleY);
-    }
+export function startGridDetection(asset) {
+    const requestId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    let worker = null;
+    let cancelled = false;
+    let rejectPromise = null;
 
-    const worker = new Worker(new URL('../workers/gridAnalysis.worker.js', import.meta.url), { type: 'module' });
-    const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const promise = createAnalysisImageData(asset)
+        .then(({ imageData, scaleX, scaleY }) => {
+            if (cancelled) throw createAbortError();
 
-    return new Promise((resolve, reject) => {
-        worker.onmessage = (event) => {
-            worker.terminate();
-            if (!event.data.ok) {
-                reject(new Error(event.data.error));
-                return;
+            if (typeof Worker === 'undefined') {
+                return scaleAnalysis(analyzeGridImageData({
+                    data: imageData.data,
+                    width: imageData.width,
+                    height: imageData.height,
+                }), scaleX, scaleY);
             }
-            resolve(scaleAnalysis(event.data.analysis, scaleX, scaleY));
-        };
-        worker.onerror = (event) => {
-            worker.terminate();
-            reject(new Error(event.message || 'Fallo el Web Worker de deteccion.'));
-        };
-        worker.postMessage({
-            id,
-            imageData: {
-                width: imageData.width,
-                height: imageData.height,
-                data: imageData.data.buffer,
-            },
-        }, [imageData.data.buffer]);
-    });
+
+            worker = new Worker(new URL('../workers/gridAnalysis.worker.js', import.meta.url), { type: 'module' });
+
+            return new Promise((resolve, reject) => {
+                rejectPromise = reject;
+                worker.onmessage = (event) => {
+                    worker.terminate();
+                    worker = null;
+                    if (cancelled) {
+                        reject(createAbortError());
+                        return;
+                    }
+                    if (!event.data.ok || event.data.sourceId !== asset.id || event.data.requestId !== requestId) {
+                        reject(new Error(event.data.error || 'Respuesta de deteccion invalida.'));
+                        return;
+                    }
+                    resolve(scaleAnalysis(event.data.analysis, scaleX, scaleY));
+                };
+                worker.onerror = (event) => {
+                    worker?.terminate();
+                    worker = null;
+                    reject(new Error(event.message || 'Fallo el Web Worker de deteccion.'));
+                };
+                worker.postMessage({
+                    requestId,
+                    sourceId: asset.id,
+                    imageData: {
+                        width: imageData.width,
+                        height: imageData.height,
+                        data: imageData.data.buffer,
+                    },
+                }, [imageData.data.buffer]);
+            });
+        });
+
+    return {
+        requestId,
+        sourceId: asset.id,
+        promise,
+        cancel() {
+            cancelled = true;
+            if (worker) {
+                worker.terminate();
+                worker = null;
+            }
+            if (rejectPromise) {
+                rejectPromise(createAbortError());
+                rejectPromise = null;
+            }
+        },
+    };
+}
+
+function createAbortError() {
+    const error = new Error('Deteccion cancelada.');
+    error.name = 'AbortError';
+    return error;
 }
 
 export function scaleAnalysis(analysis, scaleX, scaleY) {

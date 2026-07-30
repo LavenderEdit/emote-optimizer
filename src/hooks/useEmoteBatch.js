@@ -1,26 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { generateEmotesZip } from '../utils/exportUtils';
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
+import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
-import { extractGridCellsToDocuments, getCellGenerationKey } from '../features/grid-import/gridSegmentation/extractGridCells';
-import { detectGridInWorker } from '../features/grid-import/gridDetection/runGridDetection';
+import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
+import { startGridDetection } from '../features/grid-import/gridDetection/runGridDetection';
 import {
     createImageAssetFromFile,
     validateDecodedImageDimensions,
     validateImageFile,
 } from '../shared/files/imageValidation';
-
-function revokeEmoteSource(emote) {
-    if (emote?.objectUrl) {
-        URL.revokeObjectURL(emote.objectUrl);
-    }
-}
-
-function revokeGridDraft(draft) {
-    if (draft?.source?.objectUrl) {
-        URL.revokeObjectURL(draft.source.objectUrl);
-    }
-}
 
 function formatValidationMessages(messages) {
     return messages.filter(Boolean).join('\n');
@@ -55,21 +44,6 @@ function mergeEmoteUpdates(emote, updates) {
     };
 }
 
-function releaseUnusedAssets(currentAssets, nextEmotes, draft) {
-    const usedSourceIds = new Set(nextEmotes.map((emote) => emote.sourceId));
-    if (draft?.source?.id) usedSourceIds.add(draft.source.id);
-
-    const nextAssets = {};
-    for (const [assetId, asset] of Object.entries(currentAssets)) {
-        if (usedSourceIds.has(assetId)) {
-            nextAssets[assetId] = asset;
-        } else {
-            revokeEmoteSource(asset);
-        }
-    }
-    return nextAssets;
-}
-
 async function createValidatedAsset(file) {
     const fileValidation = validateImageFile(file);
     if (!fileValidation.valid) {
@@ -94,6 +68,7 @@ export function useEmoteBatch() {
     const assetsRef = useRef({});
     const previewUrlsRef = useRef({});
     const gridDraftRef = useRef(null);
+    const detectionRef = useRef(null);
 
     const [emotes, setEmotes] = useState([]);
     const [assets, setAssets] = useState({});
@@ -112,39 +87,18 @@ export function useEmoteBatch() {
 
     useEffect(() => {
         emotesRef.current = emotes;
-    }, [emotes]);
-
-    useEffect(() => {
         assetsRef.current = assets;
-    }, [assets]);
-
-    useEffect(() => {
         previewUrlsRef.current = previewUrls;
-    }, [previewUrls]);
-
-    useEffect(() => {
         gridDraftRef.current = gridDraft;
-    }, [gridDraft]);
+    }, [emotes, assets, previewUrls, gridDraft]);
 
     useEffect(() => () => {
-        Object.values(assetsRef.current).forEach(revokeEmoteSource);
-        Object.values(previewUrlsRef.current).forEach(URL.revokeObjectURL);
-        if (gridDraftRef.current?.source?.id && !assetsRef.current[gridDraftRef.current.source.id]) {
-            revokeGridDraft(gridDraftRef.current);
-        }
-    }, []);
-
-    useEffect(() => {
-        emotesRef.current = emotes;
-    }, [emotes]);
-
-    useEffect(() => {
-        gridDraftRef.current = gridDraft;
-    }, [gridDraft]);
-
-    useEffect(() => () => {
-        emotesRef.current.forEach(revokeEmoteSource);
-        revokeGridDraft(gridDraftRef.current);
+        detectionRef.current?.cancel?.();
+        releaseAllResources({
+            assets: assetsRef.current,
+            previewUrls: previewUrlsRef.current,
+            gridDraft: gridDraftRef.current,
+        });
     }, []);
 
     const updateActiveEmote = useCallback((updates) => {
@@ -155,7 +109,7 @@ export function useEmoteBatch() {
     const updateActivePreview = useCallback((emoteId, blob) => {
         const nextUrl = URL.createObjectURL(blob);
         setPreviewUrls((current) => {
-            if (current[emoteId]) URL.revokeObjectURL(current[emoteId]);
+            revokePreview(current[emoteId]);
             return { ...current, [emoteId]: nextUrl };
         });
     }, []);
@@ -174,8 +128,11 @@ export function useEmoteBatch() {
         try {
             if (requestedMode === 'grid') {
                 const { asset, warnings } = await createValidatedAsset(fileList[0]);
+                detectionRef.current?.cancel?.();
+                detectionRef.current = null;
+                setIsDetectingGrid(false);
                 setGridDraft((current) => {
-                    if (current?.source?.id && !assetsRef.current[current.source.id]) revokeGridDraft(current);
+                    revokeGridDraft(current, assetsRef.current);
                     const draft = createGridDraft(asset);
                     return {
                         ...draft,
@@ -197,7 +154,7 @@ export function useEmoteBatch() {
                     warnings.push(...result.warnings);
                 }
             } catch (error) {
-                Object.values(createdAssets).forEach(revokeEmoteSource);
+                Object.values(createdAssets).forEach(revokeAsset);
                 throw error;
             }
 
@@ -245,10 +202,7 @@ export function useEmoteBatch() {
             return nextAssets;
         });
         setPreviewUrls((currentUrls) => {
-            if (currentUrls[current?.id]) URL.revokeObjectURL(currentUrls[current.id]);
-            const nextUrls = { ...currentUrls };
-            delete nextUrls[current?.id];
-            return nextUrls;
+            return releasePreviewForEmote(currentUrls, current?.id);
         });
         setActiveId(next[0]?.id || null);
         setIsEyedropperActive(false);
@@ -256,7 +210,7 @@ export function useEmoteBatch() {
 
     const closeGridDraft = () => {
         setGridDraft((current) => {
-            if (current?.source?.id && !assetsRef.current[current.source.id]) revokeGridDraft(current);
+            revokeGridDraft(current, assetsRef.current);
             return null;
         });
     };
@@ -265,28 +219,38 @@ export function useEmoteBatch() {
         if (!gridDraft) return;
         setIsGeneratingGrid(true);
         try {
-            const documents = extractGridCellsToDocuments(gridDraft);
-            if (documents.length === 0) return;
+            const documents = extractGridCellsToDocuments(gridDraft, emotesRef.current);
+            const nextEmotes = upsertGridCellDocuments(emotesRef.current, gridDraft, documents);
             setAssets((current) => {
                 const next = { ...current, [gridDraft.source.id]: gridDraft.source };
                 assetsRef.current = next;
                 return next;
             });
-            setEmotes(prev => [...prev, ...documents]);
+            setEmotes(nextEmotes);
+            emotesRef.current = nextEmotes;
             setGridDraft(current => current ? {
                 ...current,
                 generatedCount: current.generatedCount + documents.length,
-                generatedCellKeys: {
-                    ...(current.generatedCellKeys || {}),
-                    ...Object.fromEntries(
-                        current.cells
-                            .filter((cell) => documents.some((document) => document.gridCell?.id === cell.id))
-                            .map((cell) => [cell.id, getCellGenerationKey(cell)])
-                    ),
-                },
+                generatedCellKeys: Object.fromEntries(
+                    current.cells
+                        .filter((cell) => cell.enabled && !cell.empty)
+                        .map((cell) => [cell.id, getCellGenerationKey(cell)])
+                ),
             } : current);
+            setAssets((currentAssets) => {
+                const nextAssets = releaseUnusedAssets(currentAssets, nextEmotes, gridDraft);
+                assetsRef.current = nextAssets;
+                return nextAssets;
+            });
+            setPreviewUrls((currentUrls) => {
+                const nextUrls = releasePreviewsForRemovedEmotes(currentUrls, nextEmotes);
+                previewUrlsRef.current = nextUrls;
+                return nextUrls;
+            });
             if (documents.length > 0) {
                 setActiveId(documents[0].id);
+            } else if (activeId && !nextEmotes.some((emote) => emote.id === activeId)) {
+                setActiveId(nextEmotes[0]?.id || null);
             }
         } catch (error) {
             console.error('Error al generar recortes:', error);
@@ -298,11 +262,22 @@ export function useEmoteBatch() {
 
     const detectGridAutomatically = async () => {
         if (!gridDraft?.source) return;
+        detectionRef.current?.cancel?.();
+        const sourceId = gridDraft.source.id;
+        const request = startGridDetection(gridDraft.source);
+        detectionRef.current = request;
         setIsDetectingGrid(true);
         try {
-            const analysis = await detectGridInWorker(gridDraft.source);
+            const analysis = await request.promise;
+            if (
+                detectionRef.current?.requestId !== request.requestId ||
+                detectionRef.current?.sourceId !== sourceId ||
+                gridDraftRef.current?.source?.id !== sourceId
+            ) {
+                return;
+            }
             setGridDraft((current) => {
-                if (!current) return current;
+                if (!current || current.source.id !== sourceId) return current;
                 const nextDraft = createGridDraftFromAnalysis(current.source, analysis);
                 return {
                     ...nextDraft,
@@ -312,6 +287,7 @@ export function useEmoteBatch() {
                 };
             });
         } catch (error) {
+            if (error.name === 'AbortError') return;
             console.error('Error en deteccion automatica:', error);
             setGridDraft((current) => current ? {
                 ...current,
@@ -319,7 +295,10 @@ export function useEmoteBatch() {
                 warnings: ['No se pudo detectar automaticamente. Continua con el grid manual.'],
             } : current);
         } finally {
-            setIsDetectingGrid(false);
+            if (detectionRef.current?.requestId === request.requestId) {
+                detectionRef.current = null;
+                setIsDetectingGrid(false);
+            }
         }
     };
 
