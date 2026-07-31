@@ -389,7 +389,7 @@ export default function SidebarRight({
                             label="Tamano PNG"
                             value={exportOptions?.customSize || 512}
                             min={28}
-                            max={1024}
+                            max={4096}
                             isDark={isDark}
                             onChange={(customSize) => onExportOptionsChange({ customSize })}
                         />

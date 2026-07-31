@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyDropShadow, createOutputPlacement } from './renderEmote';
+import { applyDropShadow, createOutputPlacement, resolveOutputSharpenAmount } from './renderEmote';
 
 describe('createOutputPlacement', () => {
     it('contains rectangular crops without deformation', () => {
@@ -50,6 +50,16 @@ describe('createOutputPlacement', () => {
         expect(Math.max(...centerX) - Math.min(...centerX)).toBeLessThan(0.04);
         expect(Math.max(...centerY) - Math.min(...centerY)).toBeLessThan(0.04);
         expect(Math.max(...widthRatio) - Math.min(...widthRatio)).toBeLessThan(0.04);
+    });
+
+    it('uses stronger output sharpening for smaller Twitch sizes', () => {
+        const amounts = [112, 56, 28].map((size) => resolveOutputSharpenAmount(size));
+
+        expect(amounts[0]).toBeGreaterThan(0);
+        expect(amounts[1]).toBeGreaterThan(amounts[0]);
+        expect(amounts[2]).toBeGreaterThan(amounts[1]);
+        expect(resolveOutputSharpenAmount(112, { exportQuality: { outputSharpen: 0.5 } })).toBe(0.5);
+        expect(resolveOutputSharpenAmount(112, { exportQuality: { outputSharpen: 4 } })).toBe(1);
     });
 
     it('adds a drop shadow behind visible pixels without replacing opaque content', () => {
