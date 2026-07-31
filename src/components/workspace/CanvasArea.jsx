@@ -16,6 +16,8 @@ export default function CanvasArea({
     onGridUploadClick,
     onFileDrop,
     gridDraft,
+    hasHiddenGridDraft,
+    onShowGridDraft,
     onGridDraftChange,
     onGridGenerate,
     onGridAutoDetect,
@@ -72,15 +74,30 @@ export default function CanvasArea({
                     onGridUploadClick={onGridUploadClick}
                 />
             ) : (
-                <ActiveCanvas
-                    canvasRef={canvasRef}
-                    currentStyles={currentStyles}
-                    isDark={isDark}
-                    isEyedropperActive={isEyedropperActive}
-                    isRestoring={isRestoring}
-                    onImageRemove={onImageRemove}
-                    mouseHandlers={mouseHandlers}
-                />
+                <>
+                    <ActiveCanvas
+                        canvasRef={canvasRef}
+                        currentStyles={currentStyles}
+                        isDark={isDark}
+                        isEyedropperActive={isEyedropperActive}
+                        isRestoring={isRestoring}
+                        onImageRemove={onImageRemove}
+                        mouseHandlers={mouseHandlers}
+                    />
+                    {hasHiddenGridDraft && (
+                        <button
+                            type="button"
+                            data-testid="show-grid-editor"
+                            onClick={onShowGridDraft}
+                            className={`absolute left-4 top-4 rounded border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${isDark
+                                ? 'border-[#7f6000]/60 bg-[#3d2304] text-[#deb069] hover:bg-[#7f6000]/20'
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Volver al grid
+                        </button>
+                    )}
+                </>
             )}
         </div>
     );

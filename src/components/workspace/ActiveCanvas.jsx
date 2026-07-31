@@ -11,10 +11,11 @@ export default function ActiveCanvas({
     mouseHandlers
 }) {
     return (
-        <div className="relative flex flex-col items-center w-full h-full justify-center">
+        <div data-testid="active-canvas-view" className="relative flex flex-col items-center w-full h-full justify-center">
             <div className={`p-4 rounded-lg shadow-2xl flex items-center justify-center max-w-full max-h-full ${currentStyles.canvasContainer}`}>
                 <canvas
                     ref={canvasRef}
+                    data-testid="active-canvas"
                     {...mouseHandlers}
                     style={TRANSPARENCY_GRID}
                     className={`max-w-full max-h-[60vh] object-contain rounded drop-shadow-md ${currentStyles.canvasBg}

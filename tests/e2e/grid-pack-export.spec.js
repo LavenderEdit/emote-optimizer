@@ -47,6 +47,22 @@ test('right sidebar keeps Fondo v2 actions reachable at 1920x900', async ({ page
     await expect(page.getByTestId('prepare-export')).toBeVisible();
 });
 
+test('generated crops open the personalized processed editor from the bottom strip', async ({ page }) => {
+    await loadReferenceGridDraft(page);
+    await page.getByTestId('generate-grid-emotes').click();
+
+    await expect(page.getByTestId('active-canvas-view')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Grid manual', { exact: true })).not.toBeVisible();
+    await expect(page.getByTestId('show-grid-editor')).toBeVisible();
+
+    await page.getByTestId('show-grid-editor').click();
+    await expect(page.getByText('Grid manual', { exact: true })).toBeVisible();
+
+    await page.getByLabel('Abrir emote_002').click();
+    await expect(page.getByTestId('active-canvas-view')).toBeVisible();
+    await expect(page.getByText('Grid manual', { exact: true })).not.toBeVisible();
+});
+
 test('reference grid exports 72 valid Twitch manual PNGs with reports', async ({ page }) => {
     await prepareReferenceGridPack(page);
 

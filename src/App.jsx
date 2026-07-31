@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from './components/layout/Header';
 import SidebarLeft from './components/workspace/SidebarLeft';
 import CanvasArea from './components/workspace/CanvasArea';
@@ -28,6 +28,7 @@ function App() {
     processFiles, handleFileInput, triggerUpload,
     handleRemoveActive, saveToHistory, undo, exportToZip
   } = useEmoteBatch();
+  const [isGridEditorOpen, setIsGridEditorOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -38,6 +39,27 @@ function App() {
   }, [undo]);
 
   const isDark = theme === 'dark';
+  const gridDraftId = gridDraft?.id;
+  const visibleGridDraft = gridDraft && isGridEditorOpen ? gridDraft : null;
+
+  useEffect(() => {
+    setIsGridEditorOpen(Boolean(gridDraftId));
+  }, [gridDraftId]);
+
+  const activateEmote = (id) => {
+    setActiveId(id);
+    if (gridDraft) setIsGridEditorOpen(false);
+  };
+
+  const handleGridGenerate = async () => {
+    await generateGridEmotes();
+    setIsGridEditorOpen(false);
+  };
+
+  const handleGridCancel = () => {
+    closeGridDraft();
+    setIsGridEditorOpen(false);
+  };
 
   return (
     <div className={`h-screen w-full flex flex-col font-sans ${isDark ? 'bg-[#3d0604] text-[#deb069]' : 'bg-gray-100 text-gray-900'}`}>
@@ -71,11 +93,13 @@ function App() {
             onUploadClick={() => triggerUpload('individual')}
             onGridUploadClick={() => triggerUpload('grid')}
             onFileDrop={(file) => processFiles([file])}
-            gridDraft={gridDraft}
+            gridDraft={visibleGridDraft}
+            hasHiddenGridDraft={Boolean(gridDraft && !visibleGridDraft)}
+            onShowGridDraft={() => setIsGridEditorOpen(true)}
             onGridDraftChange={updateGridDraft}
-            onGridGenerate={generateGridEmotes}
+            onGridGenerate={handleGridGenerate}
             onGridAutoDetect={detectGridAutomatically}
-            onGridCancel={closeGridDraft}
+            onGridCancel={handleGridCancel}
             isGeneratingGrid={isGeneratingGrid}
             isDetectingGrid={isDetectingGrid}
             comparisonMode={comparisonMode}
@@ -92,9 +116,10 @@ function App() {
               theme={theme}
               emotes={emotes}
               assets={assets}
+              previewUrls={activePreviewUrl && activeId ? { [activeId]: activePreviewUrl } : {}}
               activeId={activeId}
               selectedEmoteIds={selectedEmoteIds}
-              onActivate={setActiveId}
+              onActivate={activateEmote}
               onToggleSelection={toggleEmoteSelection}
               onRemoveActive={handleRemoveActive}
               onUploadClick={() => triggerUpload('individual')}

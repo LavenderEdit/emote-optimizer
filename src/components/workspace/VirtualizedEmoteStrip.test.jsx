@@ -41,4 +41,28 @@ describe('VirtualizedEmoteStrip', () => {
         expect(screen.getByRole('button', { name: 'Abrir emote_090' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Abrir emote_000' })).not.toBeInTheDocument();
     });
+
+    it('shows a processed preview thumbnail when one is available', () => {
+        render(
+            <VirtualizedEmoteStrip
+                theme="light"
+                emotes={[{
+                    id: 'emote-active',
+                    name: 'emote_active',
+                    sourceId: 'asset',
+                    cropRect: { x: 0, y: 0, width: 64, height: 64 },
+                }]}
+                assets={{ asset: { id: 'asset', width: 64, height: 64, objectUrl: 'blob:asset' } }}
+                previewUrls={{ 'emote-active': 'blob:processed-preview' }}
+                activeId="emote-active"
+                selectedEmoteIds={[]}
+                onActivate={vi.fn()}
+                onToggleSelection={vi.fn()}
+                onRemoveActive={vi.fn()}
+                onUploadClick={vi.fn()}
+            />
+        );
+
+        expect(screen.getByRole('img', { name: 'emote_active' })).toHaveAttribute('src', 'blob:processed-preview');
+    });
 });
