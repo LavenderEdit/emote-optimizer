@@ -6,6 +6,63 @@ import { hasPngSignature, readPngImageDataFromBuffer } from '../../src/test/fixt
 
 const referenceGridPath = resolve(process.cwd(), 'src/test/fixtures/images/reference-grid-994x1001.png');
 
+test('reference grid editor remains scrollable at 1365x768 with r5c5 reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 1365, height: 768 });
+    await loadReferenceGridDraft(page);
+
+    const workspace = page.getByTestId('grid-import-workspace');
+    await workspace.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+    await expect(page.getByRole('button', { name: 'Celda fila 5, columna 5' })).toBeVisible();
+
+    const configPanel = page.getByTestId('grid-config-panel');
+    await configPanel.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+    const reviewList = page.getByTestId('cell-review-list');
+    await reviewList.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+
+    await expect(page.getByText('Fila 5, Col 5')).toBeVisible();
+    await expect(page.getByText('No se exportara mientras este marcada como vacia.')).toBeVisible();
+});
+
+test('right sidebar keeps Fondo v2 actions reachable at 1920x900', async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await prepareReferenceGridPack(page, { applyBackground: false });
+
+    const sidebarScroll = page.getByTestId('right-sidebar-scroll');
+    await expect(page.getByTestId('background-v2-light-grid-all')).toBeVisible();
+    await expect(page.getByText('Fondo activo')).toBeVisible();
+    await expect(page.getByText('Fondo seleccion')).toBeVisible();
+    await expect(page.getByText('Fondo todos')).toBeVisible();
+    await expect(page.getByTestId('comparison-mask-mode')).toBeVisible();
+
+    await sidebarScroll.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+    });
+    await expect(page.getByTestId('download-prepared-export')).toBeVisible();
+    await expect(page.getByTestId('prepare-export')).toBeVisible();
+});
+
+test('generated crops open the personalized processed editor from the bottom strip', async ({ page }) => {
+    await loadReferenceGridDraft(page);
+    await page.getByTestId('generate-grid-emotes').click();
+
+    await expect(page.getByTestId('active-canvas-view')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Grid manual', { exact: true })).not.toBeVisible();
+    await expect(page.getByTestId('show-grid-editor')).toBeVisible();
+
+    await page.getByTestId('show-grid-editor').click();
+    await expect(page.getByText('Grid manual', { exact: true })).toBeVisible();
+
+    await page.getByLabel('Abrir emote_002').click();
+    await expect(page.getByTestId('active-canvas-view')).toBeVisible();
+    await expect(page.getByText('Grid manual', { exact: true })).not.toBeVisible();
+});
+
 test('reference grid exports 72 valid Twitch manual PNGs with reports', async ({ page }) => {
     await prepareReferenceGridPack(page);
 
@@ -111,6 +168,18 @@ test('real browser Canvas encoder produces valid transparent Twitch PNGs', async
 });
 
 async function prepareReferenceGridPack(page, { applyBackground = true } = {}) {
+    await loadReferenceGridDraft(page);
+
+    await page.getByTestId('generate-grid-emotes').click();
+    await expect(page.getByTestId('prepare-export')).toContainText('Exportar 24 Emotes', { timeout: 30_000 });
+
+    if (!applyBackground) return;
+
+    await page.getByTestId('background-v2-light-grid-all').click();
+    await expect(page.getByText(/% removido/)).toBeVisible({ timeout: 60_000 });
+}
+
+async function loadReferenceGridDraft(page) {
     await page.goto('/');
 
     const fileChooserPromise = page.waitForEvent('filechooser');
@@ -123,14 +192,6 @@ async function prepareReferenceGridPack(page, { applyBackground = true } = {}) {
     await expect(page.getByLabel('Filas')).toHaveValue('5');
     await expect(page.getByLabel('Columnas')).toHaveValue('5');
     await expect(page.getByTestId('grid-active-count')).toContainText('24 activos', { timeout: 30_000 });
-
-    await page.getByTestId('generate-grid-emotes').click();
-    await expect(page.getByTestId('prepare-export')).toContainText('Exportar 24 Emotes', { timeout: 30_000 });
-
-    if (!applyBackground) return;
-
-    await page.getByTestId('background-v2-all').click();
-    await expect(page.getByText(/% removido/)).toBeVisible({ timeout: 60_000 });
 }
 
 async function exportPreparedZip(page, { expectedSummary }) {

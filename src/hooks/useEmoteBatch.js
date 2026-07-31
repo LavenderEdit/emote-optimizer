@@ -3,7 +3,7 @@ import { buildEmotesZip, createValidatedEmoteOutput, getOutputRules, getPresetBy
 import { createEmoteDocumentFromAsset } from '../features/editor/model/createEmoteDocument';
 import { createEmoteVariant } from '../features/editor/model/variants';
 import { releaseAllResources, releasePreviewForEmote, releasePreviewsForRemovedEmotes, releaseUnusedAssets, revokeAsset, revokeGridDraft, revokePreview } from '../features/editor/model/resourceLifecycle';
-import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2 } from '../features/editor/imagePipeline/backgroundRemovalV2';
+import { DEFAULT_BACKGROUND_REMOVAL_V2, analyzeEmoteBackgroundRemovalV2, getBackgroundRemovalV2Preset } from '../features/editor/imagePipeline/backgroundRemovalV2';
 import { trimEmoteToContent } from '../features/editor/imagePipeline/trimContent';
 import { createGridDraft, createGridDraftFromAnalysis } from '../features/grid-import/gridSegmentation/gridDraft';
 import { extractGridCellsToDocuments, getCellGenerationKey, upsertGridCellDocuments } from '../features/grid-import/gridSegmentation/extractGridCells';
@@ -551,7 +551,9 @@ export function useEmoteBatch() {
     }, [clearPreviewsForIds, getTargetEmoteIds]);
 
     const applyBackgroundRemovalV2 = useCallback(async (scope = 'targets', mode = 'connected', options = {}) => {
-        if (mode === 'global' && !options.globalConfirmed) {
+        const preset = options.presetId ? getBackgroundRemovalV2Preset(options.presetId) : null;
+        const resolvedMode = preset?.mode || mode;
+        if (resolvedMode === 'global' && !options.globalConfirmed) {
             const accepted = typeof window === 'undefined'
                 ? false
                 : window.confirm('Global es agresivo: puede eliminar ojos, dientes, texto y brillos blancos. Usa Connected por defecto. Continuar?');
@@ -580,18 +582,20 @@ export function useEmoteBatch() {
 
                 try {
                     const analysis = await analyzeEmoteBackgroundRemovalV2(emote, asset, {
-                        mode,
-                        tolerance: emote.backgroundRemoval?.tolerance ?? emote.tolerance ?? 34,
-                        feather: emote.backgroundRemoval?.feather ?? 1,
-                        despill: emote.backgroundRemoval?.despill ?? 0.75,
-                        brushRadius: emote.backgroundRemoval?.brushRadius ?? 10,
-                        excessiveRemovalThreshold: emote.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
+                        mode: resolvedMode,
+                        samples: preset?.samples,
+                        tolerance: preset?.tolerance ?? emote.backgroundRemoval?.tolerance ?? emote.tolerance ?? 34,
+                        feather: preset?.feather ?? emote.backgroundRemoval?.feather ?? 1,
+                        despill: preset?.despill ?? emote.backgroundRemoval?.despill ?? 0.75,
+                        brushRadius: preset?.brushRadius ?? emote.backgroundRemoval?.brushRadius ?? 10,
+                        excessiveRemovalThreshold: preset?.excessiveRemovalThreshold ?? emote.backgroundRemoval?.excessiveRemovalThreshold ?? 0.72,
                     });
                     const backgroundWarnings = analysis.warnings.map((warning) => createBackgroundWarning(warning, 'background-removal-v2-excessive'));
                     updatesById[emote.id] = {
                         backgroundRemoval: {
                             ...analysis.backgroundRemoval,
-                            mode,
+                            presetId: preset?.id,
+                            mode: resolvedMode,
                             erasurePoints: [],
                             restorePoints: [],
                         },

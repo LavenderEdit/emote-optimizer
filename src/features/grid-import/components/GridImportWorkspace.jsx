@@ -68,10 +68,10 @@ export default function GridImportWorkspace({
     };
 
     return (
-        <div className={`h-full w-full overflow-hidden p-4 ${isDark ? 'text-[#deb069]' : 'text-gray-900'}`}>
-            <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] gap-4">
-                <section className={`min-h-0 rounded-lg border p-4 ${isDark ? 'border-[#7f6000]/50 bg-[#3d2304]' : 'border-gray-300 bg-white'}`}>
-                    <div className="mb-3 flex items-center justify-between gap-3">
+        <div data-testid="grid-import-workspace" className={`h-full min-h-0 w-full overflow-auto p-3 sm:p-4 ${isDark ? 'text-[#deb069]' : 'text-gray-900'}`}>
+            <div className="grid min-h-full grid-cols-1 gap-4 xl:grid-cols-[minmax(620px,1fr)_360px]">
+                <section className={`flex min-h-[520px] flex-col overflow-hidden rounded-lg border p-3 sm:p-4 ${isDark ? 'border-[#7f6000]/50 bg-[#3d2304]' : 'border-gray-300 bg-white'}`}>
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide">
                                 <Grid2X2 size={16} />
@@ -81,7 +81,7 @@ export default function GridImportWorkspace({
                                 {draft.source.fileName} - {draft.source.width} x {draft.source.height}px
                             </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
                                 onClick={onAutoDetect}
@@ -131,7 +131,7 @@ export default function GridImportWorkspace({
                     />
                 </section>
 
-                <aside className={`min-h-0 overflow-y-auto rounded-lg border p-4 ${isDark ? 'border-[#7f6000]/50 bg-[#3d2304]' : 'border-gray-300 bg-white'}`}>
+                <aside data-testid="grid-config-panel" className={`min-h-0 overflow-y-auto rounded-lg border p-3 sm:p-4 ${isDark ? 'border-[#7f6000]/50 bg-[#3d2304]' : 'border-gray-300 bg-white'}`}>
                     <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide">Configurar grid</h3>
                     <div className="grid grid-cols-2 gap-3">
                         <NumberField label="Filas" min={1} max={20} value={draft.settings.rows} onChange={(value) => updateSettings({ rows: value })} isDark={isDark} />
@@ -191,7 +191,7 @@ export default function GridImportWorkspace({
                                 }`}
                         >
                             <Scissors size={16} />
-                            {isGenerating ? 'Generando...' : `Generar ${pendingCount} recortes`}
+                            {isGenerating ? 'Generando...' : pendingCount > 0 ? `Generar ${pendingCount} recortes` : 'Sin cambios pendientes'}
                         </button>
                     </div>
 
@@ -225,6 +225,7 @@ export default function GridImportWorkspace({
 
 function GridOverlay({ draft, isDark, onDraftChange, selectedCellId, onSelectCell, selectedGuide, onSelectGuide, onNudgeGuide }) {
     const [drag, setDrag] = useState(null);
+    const previewWidth = Math.min(draft.source.width, 980);
 
     const getSourcePoint = (event) => {
         const rect = event.currentTarget.getBoundingClientRect();
@@ -281,7 +282,8 @@ function GridOverlay({ draft, isDark, onDraftChange, selectedCellId, onSelectCel
 
     return (
         <div
-            className={`flex h-[calc(100%-5rem)] min-h-0 items-center justify-center overflow-auto rounded border ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}
+            data-testid="grid-overlay-scroll"
+            className={`flex min-h-[360px] flex-1 items-start justify-start overflow-auto rounded border xl:justify-center ${isDark ? 'border-[#7f6000]/40 bg-[#3d0604]' : 'border-gray-200 bg-gray-50'}`}
             tabIndex={0}
             onKeyDown={(event) => {
                 if (!selectedGuide) return;
@@ -295,11 +297,11 @@ function GridOverlay({ draft, isDark, onDraftChange, selectedCellId, onSelectCel
                 }
             }}
         >
-            <div className="relative inline-block max-h-full max-w-full">
+            <div className="relative inline-block max-w-none shrink-0" style={{ width: previewWidth }}>
                 <img
                     src={draft.source.objectUrl}
                     alt="Grid fuente"
-                    className="block max-h-[68vh] max-w-full object-contain"
+                    className="block h-auto w-full object-contain"
                 />
                 <svg
                     className="absolute inset-0 h-full w-full touch-none"
@@ -406,7 +408,7 @@ function CellReview({ source, cells, selectedCellId, onSelectCell, isDark, onUpd
     return (
         <div className="mt-5">
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide">Revisar celdas</h3>
-            <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1">
+            <div data-testid="cell-review-list" className="grid max-h-[22rem] grid-cols-1 gap-2 overflow-y-auto pr-1">
                 {cells.map((cell) => (
                     <div
                         key={cell.id}

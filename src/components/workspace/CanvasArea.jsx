@@ -16,6 +16,8 @@ export default function CanvasArea({
     onGridUploadClick,
     onFileDrop,
     gridDraft,
+    hasHiddenGridDraft,
+    onShowGridDraft,
     onGridDraftChange,
     onGridGenerate,
     onGridAutoDetect,
@@ -51,7 +53,7 @@ export default function CanvasArea({
 
     return (
         <div
-            className={`flex-1 relative flex items-center justify-center p-8 transition-all duration-200 ${dragBgClass}`}
+            className={`relative flex min-h-0 flex-1 transition-all duration-200 ${gridDraft ? 'items-stretch justify-start overflow-hidden p-3 sm:p-4' : 'items-center justify-center p-8'} ${dragBgClass}`}
             {...dragHandlers}
         >
             {gridDraft ? (
@@ -72,15 +74,30 @@ export default function CanvasArea({
                     onGridUploadClick={onGridUploadClick}
                 />
             ) : (
-                <ActiveCanvas
-                    canvasRef={canvasRef}
-                    currentStyles={currentStyles}
-                    isDark={isDark}
-                    isEyedropperActive={isEyedropperActive}
-                    isRestoring={isRestoring}
-                    onImageRemove={onImageRemove}
-                    mouseHandlers={mouseHandlers}
-                />
+                <>
+                    <ActiveCanvas
+                        canvasRef={canvasRef}
+                        currentStyles={currentStyles}
+                        isDark={isDark}
+                        isEyedropperActive={isEyedropperActive}
+                        isRestoring={isRestoring}
+                        onImageRemove={onImageRemove}
+                        mouseHandlers={mouseHandlers}
+                    />
+                    {hasHiddenGridDraft && (
+                        <button
+                            type="button"
+                            data-testid="show-grid-editor"
+                            onClick={onShowGridDraft}
+                            className={`absolute left-4 top-4 rounded border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${isDark
+                                ? 'border-[#7f6000]/60 bg-[#3d2304] text-[#deb069] hover:bg-[#7f6000]/20'
+                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            Volver al grid
+                        </button>
+                    )}
+                </>
             )}
         </div>
     );

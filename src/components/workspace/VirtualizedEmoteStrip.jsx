@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CheckSquare, Plus, Square, X } from 'lucide-react';
+import { TRANSPARENCY_GRID } from '../../constants/CanvasStyles';
 
 const ITEM_SIZE = 64;
 const ITEM_STEP = 80;
@@ -10,6 +11,7 @@ export default function VirtualizedEmoteStrip({
     theme,
     emotes,
     assets,
+    previewUrls = {},
     activeId,
     selectedEmoteIds,
     onActivate,
@@ -81,7 +83,7 @@ export default function VirtualizedEmoteStrip({
                             style={{ left }}
                             aria-label={`Abrir ${emote.name}`}
                         >
-                            <DocumentThumbnail emote={emote} asset={assets[emote.sourceId]} />
+                            <DocumentThumbnail emote={emote} asset={assets[emote.sourceId]} previewUrl={previewUrls[emote.id]} />
                             <button
                                 type="button"
                                 aria-label={`Seleccionar ${emote.name}`}
@@ -117,7 +119,15 @@ export default function VirtualizedEmoteStrip({
     );
 }
 
-function DocumentThumbnail({ emote, asset }) {
+function DocumentThumbnail({ emote, asset, previewUrl }) {
+    if (previewUrl) {
+        return (
+            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-md" style={TRANSPARENCY_GRID}>
+                <img src={previewUrl} alt={emote.name} className="h-full w-full object-contain" />
+            </div>
+        );
+    }
+
     if (!asset) {
         return <div className="h-full w-full rounded-md bg-black/20" />;
     }
