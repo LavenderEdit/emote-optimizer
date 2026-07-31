@@ -45,7 +45,7 @@ function App() {
 
       <Header theme={theme} toggleTheme={() => setTheme(isDark ? 'light' : 'dark')} projectPersistence={projectPersistence} />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
 
         <SidebarLeft
           theme={theme}
@@ -62,7 +62,7 @@ function App() {
           onAdjustmentsChange={(adjustments) => updateSelectedOrActiveEmotes({ adjustments })}
         />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <CanvasArea
             theme={theme}
             emote={activeEmote}

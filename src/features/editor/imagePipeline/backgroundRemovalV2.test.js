@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyBackgroundRemovalMask, createBackgroundRemovalMask, sampleBackgroundColorsFromEdges } from './backgroundRemovalV2';
+import { applyBackgroundRemovalMask, createBackgroundRemovalMask, getBackgroundRemovalV2Preset, sampleBackgroundColorsFromEdges } from './backgroundRemovalV2';
 
 describe('backgroundRemovalV2', () => {
     it('removes connected white exterior while preserving internal white text and face details', () => {
@@ -29,6 +29,42 @@ describe('backgroundRemovalV2', () => {
         expect(samples[0][0]).toBeGreaterThan(225);
         expect(alphaAt(result.mask, image.width, 0, 8)).toBe(0);
         expect(alphaAt(result.mask, image.width, 8, 8)).toBe(255);
+    });
+
+    it('removes connected light grid backgrounds with #EFEFEF and #FEFEFE samples', () => {
+        const image = createImage(24, 24, [239, 239, 239, 255]);
+        fill(image, { x: 2, y: 2, width: 20, height: 20 }, [254, 254, 254, 255]);
+        fill(image, { x: 5, y: 5, width: 14, height: 14 }, [24, 26, 30, 255]);
+        fill(image, { x: 8, y: 9, width: 2, height: 1 }, [254, 254, 254, 255]);
+        fill(image, { x: 14, y: 9, width: 2, height: 1 }, [254, 254, 254, 255]);
+        fill(image, { x: 9, y: 15, width: 6, height: 1 }, [254, 254, 254, 255]);
+
+        const preset = getBackgroundRemovalV2Preset('light-grid');
+        const result = createBackgroundRemovalMask(image.data, image.width, image.height, {
+            ...preset,
+            feather: 0,
+        });
+
+        expect(alphaAt(result.mask, image.width, 0, 0)).toBe(0);
+        expect(alphaAt(result.mask, image.width, 3, 3)).toBe(0);
+        expect(alphaAt(result.mask, image.width, 6, 6)).toBe(255);
+        expect(alphaAt(result.mask, image.width, 9, 15)).toBe(255);
+    });
+
+    it('exposes the light grid preset with connected mode and exact samples', () => {
+        const preset = getBackgroundRemovalV2Preset('light-grid');
+
+        expect(preset).toMatchObject({
+            mode: 'connected',
+            tolerance: 36,
+            feather: 1,
+            despill: 0.6,
+            excessiveRemovalThreshold: 0.72,
+        });
+        expect(preset.samples).toEqual([
+            [239, 239, 239],
+            [254, 254, 254],
+        ]);
     });
 
     it('supports global mode for disconnected background-colored regions', () => {

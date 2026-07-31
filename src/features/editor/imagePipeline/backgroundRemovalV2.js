@@ -8,6 +8,28 @@ export const DEFAULT_BACKGROUND_REMOVAL_V2 = {
     brushRadius: 10,
 };
 
+export const BACKGROUND_REMOVAL_V2_PRESETS = {
+    lightGrid: {
+        id: 'light-grid',
+        label: 'Fondo claro grid',
+        description: 'Recomendado para fondos #EFEFEF/#FEFEFE.',
+        mode: 'connected',
+        samples: [
+            [239, 239, 239],
+            [254, 254, 254],
+        ],
+        tolerance: 36,
+        feather: 1,
+        despill: 0.6,
+        excessiveRemovalThreshold: 0.72,
+        brushRadius: 10,
+    },
+};
+
+export function getBackgroundRemovalV2Preset(presetId) {
+    return Object.values(BACKGROUND_REMOVAL_V2_PRESETS).find((preset) => preset.id === presetId) || null;
+}
+
 export function sampleBackgroundColorsFromEdges(data, width, height, options = {}) {
     const sampleSize = options.sampleSize ?? Math.max(2, Math.round(Math.min(width, height) * 0.035));
     const sampleRects = [

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { createGridDraft } from '../gridSegmentation/gridDraft';
+import { getCellGenerationKey } from '../gridSegmentation/extractGridCells';
 import GridImportWorkspace from './GridImportWorkspace';
 
 const asset = {
@@ -25,6 +26,43 @@ function Harness({ onGenerate = vi.fn(), onAutoDetect = vi.fn() }) {
             onDraftChange={(updater) => setDraft((current) => (typeof updater === 'function' ? updater(current) : updater))}
             onGenerate={onGenerate}
             onAutoDetect={onAutoDetect}
+            onCancel={vi.fn()}
+            isGenerating={false}
+            isDetecting={false}
+        />
+    );
+}
+
+function FiveByFiveHarness() {
+    const [draft, setDraft] = useState(() => {
+        const nextDraft = createGridDraft({
+            ...asset,
+            width: 994,
+            height: 1001,
+            fileName: 'reference-grid-994x1001.png',
+        }, { rows: 5, columns: 5 });
+        return {
+            ...nextDraft,
+            cells: nextDraft.cells.map((cell) => (
+                cell.id === 'r5c5'
+                    ? { ...cell, enabled: false, empty: true, classification: 'empty' }
+                    : cell
+            )),
+            generatedCellKeys: Object.fromEntries(
+                nextDraft.cells
+                    .filter((cell) => cell.id !== 'r5c5')
+                    .map((cell) => [cell.id, getCellGenerationKey(cell)])
+            ),
+        };
+    });
+
+    return (
+        <GridImportWorkspace
+            draft={draft}
+            theme="light"
+            onDraftChange={(updater) => setDraft((current) => (typeof updater === 'function' ? updater(current) : updater))}
+            onGenerate={vi.fn()}
+            onAutoDetect={vi.fn()}
             onCancel={vi.fn()}
             isGenerating={false}
             isDetecting={false}
@@ -65,5 +103,17 @@ describe('GridImportWorkspace', () => {
 
         fireEvent.click(screen.getByText('Region libre'));
         expect(screen.getByDisplayValue('region_008')).toBeInTheDocument();
+    });
+
+    it('keeps the fifth row and empty r5c5 reachable in the review list', () => {
+        render(<FiveByFiveHarness />);
+
+        const reviewList = screen.getByTestId('cell-review-list');
+        reviewList.scrollTop = reviewList.scrollHeight;
+        fireEvent.scroll(reviewList);
+
+        expect(screen.getByText('Fila 5, Col 5')).toBeInTheDocument();
+        expect(screen.getByText('Sin cambios pendientes')).toBeInTheDocument();
+        expect(screen.getByText('No se exportara mientras este marcada como vacia.')).toBeInTheDocument();
     });
 });

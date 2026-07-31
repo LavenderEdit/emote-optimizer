@@ -3,6 +3,7 @@ import { Copy, Download, Eye, EyeOff, Loader2, Scissors, Wand2 } from 'lucide-re
 import PreviewBox from '../ui/PreviewBox';
 import ChatSimulator from '../ui/ChatSimulator';
 import { formatBytes } from '../../features/performance/memoryStats';
+import { BACKGROUND_REMOVAL_V2_PRESETS } from '../../features/editor/imagePipeline/backgroundRemovalV2';
 
 export default function SidebarRight({
     theme,
@@ -69,13 +70,14 @@ export default function SidebarRight({
     const canDownloadPrepared = exportState?.downloadUrl && (exportState.status === 'valid' || exportState.status === 'invalid');
     const isManualExportPreset = (exportOptions?.presetId || 'twitch-static-manual') === 'twitch-static-manual';
     const isCustomPngPreset = exportOptions?.presetId === 'png-custom';
+    const lightGridPreset = BACKGROUND_REMOVAL_V2_PRESETS.lightGrid;
     const exportProgressLabel = exportState?.status === 'compressing'
         ? 'Finalizando ZIP'
         : `Progreso: ${exportState?.progress?.processedFiles || 0}/${exportState?.progress?.totalFiles || 0} archivos`;
 
     return (
-        <aside className={`w-80 flex flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
-            <div className="p-4 flex-1 overflow-y-auto no-scrollbar">
+        <aside data-testid="right-sidebar" className={`flex h-full min-h-0 w-80 shrink-0 flex-col border-l ${isDark ? 'border-[#7f6000] bg-[#3d2304] text-[#deb069]' : 'border-gray-300 bg-white text-gray-800'}`}>
+            <div data-testid="right-sidebar-scroll" className="min-h-0 flex-1 overflow-y-auto p-4 pb-28">
                 <h3 className={`font-semibold mb-4 text-sm uppercase tracking-wider ${isDark ? 'text-[#deb069]/60' : 'text-gray-500'}`}>
                     Twitch Preview
                 </h3>
@@ -138,6 +140,36 @@ export default function SidebarRight({
                     <div className={`text-xs ${isDark ? 'text-[#deb069]/70' : 'text-gray-600'}`}>
                         {removedPercent == null ? 'Sin mascara v2 activa' : `${removedPercent}% removido`}
                     </div>
+                    <div className={`rounded border px-2 py-2 text-xs ${isDark ? 'border-[#7f6000]/40 bg-black/20' : 'border-gray-200 bg-white'}`}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="font-semibold">{lightGridPreset.label}</span>
+                            <span className="flex items-center gap-1" aria-label="Muestras de fondo claro grid">
+                                {lightGridPreset.samples.map((sample) => {
+                                    const color = `rgb(${sample.join(',')})`;
+                                    return (
+                                        <span
+                                            key={color}
+                                            className="h-4 w-4 rounded border border-black/15"
+                                            style={{ backgroundColor: color }}
+                                            title={sample[0] === 239 ? '#EFEFEF' : '#FEFEFE'}
+                                        />
+                                    );
+                                })}
+                            </span>
+                        </div>
+                        <p className={isDark ? 'text-[#deb069]/70' : 'text-gray-600'}>
+                            Recomendado para fondos #EFEFEF/#FEFEFE.
+                        </p>
+                        <button
+                            type="button"
+                            data-testid="background-v2-light-grid-all"
+                            className={`mt-2 w-full ${buttonClass}`}
+                            onClick={() => onApplyBackgroundV2('all', 'connected', { presetId: lightGridPreset.id })}
+                            disabled={totalItems === 0 || isApplyingBackgroundV2}
+                        >
+                            Aplicar a todos con Connected
+                        </button>
+                    </div>
                     <RangeField
                         label="Tolerancia"
                         value={backgroundV2.tolerance}
@@ -180,13 +212,13 @@ export default function SidebarRight({
                     />
                     <div className="grid grid-cols-2 gap-1">
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('active', 'connected')} disabled={!activeEmote || isApplyingBackgroundV2}>
-                            {isApplyingBackgroundV2 ? <Loader2 size={13} className="inline animate-spin" /> : <Wand2 size={13} className="inline" />} Activo
+                            {isApplyingBackgroundV2 ? <Loader2 size={13} className="inline animate-spin" /> : <Wand2 size={13} className="inline" />} Fondo activo
                         </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2('targets', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
-                            Seleccion
+                            Fondo seleccion
                         </button>
                         <button type="button" data-testid="background-v2-all" className={buttonClass} onClick={() => onApplyBackgroundV2('all', 'connected')} disabled={totalItems === 0 || isApplyingBackgroundV2}>
-                            Todos
+                            Fondo todos
                         </button>
                         <button type="button" className={buttonClass} onClick={() => onApplyBackgroundV2(selectedCount > 0 ? 'targets' : 'active', 'global')} disabled={!activeEmote || isApplyingBackgroundV2}>
                             Global agresivo
@@ -330,8 +362,8 @@ export default function SidebarRight({
                         <button type="button" className={comparisonMode === 'after' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('after')}>
                             <Eye size={13} className="inline" /> Despues
                         </button>
-                        <button type="button" className={comparisonMode === 'mask' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('mask')}>
-                            Mascara
+                        <button type="button" data-testid="comparison-mask-mode" className={comparisonMode === 'mask' ? activeButtonClass : buttonClass} onClick={() => onComparisonModeChange('mask')}>
+                            Ver mascara
                         </button>
                     </div>
                 </div>
@@ -432,7 +464,7 @@ export default function SidebarRight({
                 <ChatSimulator processedImage={processedImage} theme={theme} />
             </div>
 
-            <div className={`p-4 border-t ${isDark ? 'border-[#7f6000]' : 'border-gray-300'}`}>
+            <div className={`shrink-0 border-t p-4 ${isDark ? 'border-[#7f6000]' : 'border-gray-300'}`}>
                 <button
                     onClick={() => (onPrepareExport || onExport)?.()}
                     data-testid="prepare-export"

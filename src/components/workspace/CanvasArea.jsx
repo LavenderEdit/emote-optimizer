@@ -51,7 +51,7 @@ export default function CanvasArea({
 
     return (
         <div
-            className={`flex-1 relative flex items-center justify-center p-8 transition-all duration-200 ${dragBgClass}`}
+            className={`relative flex min-h-0 flex-1 transition-all duration-200 ${gridDraft ? 'items-stretch justify-start overflow-hidden p-3 sm:p-4' : 'items-center justify-center p-8'} ${dragBgClass}`}
             {...dragHandlers}
         >
             {gridDraft ? (

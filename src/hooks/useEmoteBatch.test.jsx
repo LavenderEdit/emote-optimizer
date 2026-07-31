@@ -65,6 +65,16 @@ vi.mock('../features/editor/imagePipeline/backgroundRemovalV2', () => ({
         excessiveRemovalThreshold: 0.72,
         brushRadius: 10,
     },
+    getBackgroundRemovalV2Preset: (presetId) => (presetId === 'light-grid' ? {
+        id: 'light-grid',
+        mode: 'connected',
+        samples: [[239, 239, 239], [254, 254, 254]],
+        tolerance: 36,
+        feather: 1,
+        despill: 0.6,
+        excessiveRemovalThreshold: 0.72,
+        brushRadius: 10,
+    } : null),
     analyzeEmoteBackgroundRemovalV2: backgroundV2Mock.analyzeEmoteBackgroundRemovalV2,
 }));
 
@@ -356,6 +366,50 @@ describe('useEmoteBatch', () => {
         expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledTimes(24);
         expect(result.current.emotes.every((emote) => emote.backgroundRemoval.version === 2)).toBe(true);
         expect(new Set(result.current.emotes.map((emote) => JSON.stringify(emote.backgroundRemoval.samples)))).toHaveLength(24);
+    });
+
+    it('applies the light grid preset with connected samples and parameters', async () => {
+        backgroundV2Mock.analyzeEmoteBackgroundRemovalV2.mockImplementation((emote, asset, options) => Promise.resolve({
+            backgroundRemoval: {
+                version: 2,
+                mode: options.mode,
+                samples: options.samples,
+                tolerance: options.tolerance,
+                feather: options.feather,
+                despill: options.despill,
+                excessiveRemovalThreshold: options.excessiveRemovalThreshold,
+                removedRatio: 0.35,
+                removedPixels: 350,
+                warnings: [],
+            },
+            warnings: [],
+        }));
+        const { result } = renderHook(() => useEmoteBatch());
+        const file = new File(['image'], 'grid.png', { type: 'image/png' });
+
+        await act(async () => {
+            await result.current.processFiles([file], 'grid');
+        });
+        await act(async () => {
+            await result.current.generateGridEmotes();
+        });
+        await act(async () => {
+            await result.current.applyBackgroundRemovalV2('all', 'connected', { presetId: 'light-grid' });
+        });
+
+        expect(backgroundV2Mock.analyzeEmoteBackgroundRemovalV2).toHaveBeenCalledWith(
+            expect.any(Object),
+            expect.any(Object),
+            expect.objectContaining({
+                mode: 'connected',
+                samples: [[239, 239, 239], [254, 254, 254]],
+                tolerance: 36,
+                feather: 1,
+                despill: 0.6,
+                excessiveRemovalThreshold: 0.72,
+            }),
+        );
+        expect(result.current.emotes.every((emote) => emote.backgroundRemoval.presetId === 'light-grid')).toBe(true);
     });
 
     it('recalculates background removal v2 without keeping stale background warnings', async () => {
